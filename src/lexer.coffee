@@ -1,7 +1,11 @@
 token_types =
     "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and)/m
     "Number": /^[0-9]+/m
-    "Keyword": /^(As|For|Type|Group|Enum|To|Then|End|While|Until|Func|Match|When|Return|Else|If|Otherwise|By|Break)/m
+    "Keyword": ///
+            ^(As|For|Type|Group|Enum|To|
+            Then|End|While|Until|Func|Match|
+            When|Return|Else|If|Otherwise|By|Break)
+        ///m
     "Identifier": /^[a-zA-Z_][a-zA-Z0-9_]*/m
     "String": /^".*?"/ms
     "ParenLeft": /^\(/m
@@ -18,14 +22,14 @@ lex = (source) ->
     while source.length
         lexed_token = no
         for token_type of token_types
-            source = source.trim()
+            source = do source.trim
             if matches = source.match token_types[token_type]
                 tokens.push new Token matches[0], token_type
                 source = source.substr matches[0].length
                 lexed_token = yes
                 break
 
-        if not lexed_token
+        unless lexed_token
             console.error "Unknown token at " + source
             process.exit 1
     tokens
