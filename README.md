@@ -6,7 +6,7 @@ Dabulang is a simple imperative language. Its features are not out of the ordina
 
 Dabulang has a similar syntax to BASIC, drawing inspiration from the TI's version of BASIC: [TI-BASIC](https://en.wikipedia.org/wiki/TI-BASIC). In a nutshell, blocks of statements/expressions need to end with the `End` keyword, and all keywords start with a capital letter.
 
-In addition to TI-BASIC, Dabulang has classes, functions, singletons and a syntax that is more suited for programming on a computer as opposed to the original TI graphic calculator.
+In addition to TI-BASIC, Dabulang has functions, maps, types and a syntax that is more suited for programming on a computer as opposed to the original TI graphic calculator.
 
 ## Impression
 
@@ -16,9 +16,10 @@ Type Person = Group name As String, age As Natural, address As Address;
 
 persons = [
   Person("John", 20, Address("1 ABC street")),
-  Person("Mary", 21, AddresS("1 DEF street"))
+  Person("Mary", 21, Address("1 DEF street"))
 ];
 
+"It's kind to greet everyone";
 For i = 0 To len(persons) Then
   print("Hello " + persons(i).name);
 End
@@ -30,7 +31,7 @@ End
 
 #### 1.1 Whitespace
 
-Dabulang allows arbitrary whitespace (i.e. spaces, tabs or newlines) in every case, except in string literals (see 1.3.3)
+Dabulang allows arbitrary whitespace (i.e. spaces, tabs or newlines) in every case, except in string literals (see 1.3.3).
 
 #### 1.2 Comments
 
@@ -44,7 +45,7 @@ Integer literals are numbers which may have a prefix to define the base the numb
 
 ##### 1.3.2 Floating-point literals
 
-Floating-point literals are number literals with a decimal point. These literals are of the type `Real` (see 3.1.3.2). The syntax for floating-point literals is as follows (in ebnf-esque terms):
+Floating-point literals are number literals with a decimal point. These literals are of the type `Real`. The syntax for floating-point literals is as follows (in ebnf-esque terms):
 
 ```ebnf
 Exponent ::= ('E' | 'e') '+' Number | ('E' | 'e') '-' Number | ('E' | 'e') Number
@@ -55,7 +56,7 @@ The exponent is the same as doing `* 10^x` where x is an arbitrary natural numbe
 
 ##### 1.3.3 String literals
 
-String literals provide a way to hardcode text in your programs. String literals are converted into a `String` (see 3.2.2) at compile-time and can be though as a variable with type `String`. Every character in the literal is part of the string, so comments and other dabulang code in a string literal is not executed. String literals are, by default, multi-line. This implies that every newline in the string is also converted as a character in the string. Some characters can be escaped to give new meanings, similar to how escaped characters work in most other languages (like `\n`, `\"`). An full example of a string literal is
+String literals provide a way to hardcode text in your programs. String literals are converted into a `String` at compile-time and can be though as a variable with type `String`. Every character in the literal is part of the string, so comments and other dabulang code in a string literal is not executed. String literals are, by default, multi-line. This implies that every newline in the string is also converted as a character in the string. Some characters can be escaped to give new meanings, similar to how escaped characters work in most other languages (like `\n`, `\"`). An full example of a string literal is
 
 ```Dabulang
 "
@@ -69,7 +70,7 @@ Yours sincerely
 
 ##### 1.3.4 List literals
 
-List literals are simply syntactic sugar for writing `List(...)`. The List constructor (see 3.2.1) takes all its arguments and returns them in sequence in a List. So, `[10, 20, 30]` is the same as writing `List(10, 20, 30)`.
+List literals are simply syntactic sugar for writing `List(...)`. The List constructor takes all its arguments and returns them in sequence in a List. So, `[10, 20, 30]` is the same as writing `List(10, 20, 30)`.
 
 #### 1.3.5 Boolean literals
 
@@ -99,10 +100,8 @@ These are all the built-in operators in dabulang, all of these operators (except
 ##### 1.5.1 Arity 1
 
 - `~`: Binary not: acts the same as the `not` assembly instruction.
-- `!`: Logical not: Any thruthy value is converted into false, and any falsy value is converted to true.
+- `not`: Logical not: Any thruthy value is converted into false, and any falsy value is converted to true.
 - `-`: Unary minus: negates its operand (according to the two's complement rule).
-- `*`: Derefernce operator: the same semantics as C. This operator only operates on `Pointer[T]` types (see 3.1.1).
-- `&`: Address-of operator: the same semnatics as C. This operator yields a `Pointer[T]` type, where `T` is the type of the operand.
 - `++`:  Prefix/suffix increment operator. This operator increments the variable by one. The prefix version increments, then yields the value. The suffix version yields and then increments the value.
 - `--`: Prefix/suffix decrement operator. This operator decrements the variable by one. The prefix version decrements, then yields the value. The suffix version yields and then decrements the value.
 - `()`: Function call/Array indexing operator: This operators allows arguments inside of the parentheses and should be followed by an identifier or another function call.
@@ -152,7 +151,7 @@ True in this section refers to any thruthy value. Thruthy values are any values 
 | Operator | Presedence | Associativity |
 |----------|------------|---------------|
 |  = & co  |     0      |     Right     |
-| \|\|, && |     1      |     Left      |
+|  or, and |     1      |     Left      |
 | \|, &, ^ |     2      |     Left      |
 |  ==, !=  |     3      |     Left      |
 | <, > & co|     4      |     Left      |
@@ -275,7 +274,7 @@ The for statement is syntactic sugar for a variable declaration and a while loop
 
 A for loop can be thought of as
 
-```ebnf
+```Dabulang
 For i = 0 To high_bound By increment_count Then ... End
 "Is the same as";
 i = 0; While i < high_bound Then ...; i += increment_count; End
@@ -302,7 +301,7 @@ Break-statement ::= 'Break' ';'
 
 Enum are groups of identifiers that belong to a type. For instance, there could be an enum called `Colour` and it could define the identifiers `Red`, `Green` and `Blue`. Identifiers in an enum are unique values, that is, `Red` is equal to only `Red` and nothing else. Every enum is a type and the identifiers defined in that enum are of that type, which means that you can pass around the identifiers in well-typed functions. The grammar for enums is
 
-``` ebnf
+```ebnf
 Enum-elements ::= Identifier | Identifier ',' Enum-elements
 Enum-definition ::= 'Type' Identifier = 'Enum' Enum-elements ';'
 ```
@@ -323,7 +322,7 @@ To access the fields of a group, you can use the dot notation. The name of the v
 
 Example of defining a group and accessing members:
 
-``` Dabulang
+```Dabulang
 Type Point = Group x As Integer, y As Integer;
 
 origin = Point(0, 0);
@@ -343,17 +342,44 @@ Maps are objects that store values associated with some key. They function the s
 
 Key/value pairs can be added dynamically using the function call notation. Given `a = Map();`, then `a("hello") = 10;` associates the key "hello" to the value 10. To read a value given a key, you can use the function call notation too.
 
+#### 2.15 Generics
+
+Some intrinsic types are containers for values; Dabulang allows the value of the container to be typed as well through the use of generics. For example the `List` type can hold a sequence of values of any arbitrary type, which we denote by `List[T]` where `T` is the arbitrary type. There is no theoretical limit as to how many generic type parameters a type may have, the intrinsic Map type has two types: one for the key and one for the value.
+
+Generic type parameters can also be introduced in custom types like type aliases and group definitions, the grammar for those is
+
+```ebnf
+Type ::= Identifier | Identifier '[' Generic-type-parameters ']'
+Generic-type-parameters ::= Identifier | Identifier ',' Generic-type-parameters | Identifier '...' ',' Generic-type-parameters
+Generic-type-alias ::= 'Type' Identifier '[' Generic-type-parameters ']' '=' Type ';'
+Generic-group-definition ::= 'Type' Identifier '[' Generic-type-parameters ']' '=' 'Group' params ';'
+```
+
+There is a special syntax for arbitrary type parameters, which is `Ts...` where `Ts` is the group of type parameters. There is a constraint when using arbitrary type parameters, which is that they should appear last in the type parameters declaration list (so `[Ts..., U]` is not allowed). An example usage of arbitrary type parameters is
+
+```Dabulang
+Type AnnotatedTuple[Ts...] = Tuple[Natural, Ts...];
+```
+
+#### 2.16 Tuples
+
+Tuples are like unnamed groups, they store a combination of different types in order. For instance, let `t` be a `Tuple[String, Natural, List[Real]]`, then `t` stores a string, number and a list in a single value. There is no theoretical limit as to how many elements a tuple can hold. To access an element from a tuple, you can use the function call notation to select an element by index. Given `t` from earlier, `t(0)` would yield a `String`. There is a special case when you do `t(a)` where `a` is an arbitrary `Natural`, the return type is then `Either[String, Natural, List[Real]]`, because `a` could be the index of any element. Tuples are instantiated with the `Tuple` constructor call.
+
 ### 3. Type system
 
-All casts must be done explicitly by using the cast function. For example, `Cast(Real, 10)` would cast the `Natural` literal 10 to a `Real`.
+Dabulang is statically typed, but the types can be used at runtime. As a result, simple bugs are avoided, but the type system as restraining as they would be in a fully statically typed language. (TODO: Think about examples and explain this better)
+
+Every type in Dabulang is unique, which means that changing from one type to another requires passing the original variable to the constructor of the new call. For types with generics, every combination of type and generic parameters is also unique, going from `List[Natural]` to `List[Real]` requires a `.map(Real)`, that is a constructor call for every element of the list.
 
 ### 4. Intrinsics
 
 #### 4.1 Types
 
 Dabulang has a number of intrinsic types that correspond to aforementioned concepts. These are:
-- `List`: The data type to store items in a sequential manner;
-- `Map`: The data type for storing key/value pairs;
+- `List[T]`: The data type to store items of type `T` in a sequential manner;
+- `Map[K, V]`: The data type for storing key/value pairs;
+- `Tuple[Ts...]`: The data type for storing arbitrary types in a single value;
+- `Either[Ts...]`: The data type that stores one element of type found in `Ts` (TODO: Better documentation);
 - `Byte`: 8-bit numbers;
 - `Natural`: Whole numbers greater than 0 (analogous to unsigned integers in other languages);
 - `Integer`: Whole numbers that can be positive or negative;
