@@ -1,17 +1,8 @@
 { lex } = require "./lexer"
+parse = require "./parser"
 
 source = "
-Type Address = String;
-Type Person = Group name As String, age As Natural, address As Address;
-
-persons = [
-  Person(\"John\", 20, Address(\"1 ABC street\")),
-  Person(\"Mary\", 21, Address(\"1 DEF street\"))
-];
-
-For i = 0 To len(persons) Then
-  print(\"Hello \" + persons(i).name);
-End
+    (3 + 5) * hello((3 + [10, 20]), { a = 30 })
 "
 
-console.log lex source
+console.log parse lex source

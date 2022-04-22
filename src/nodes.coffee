@@ -19,6 +19,12 @@ class StringNode extends Node
 class CallNode extends Node
     constructor: (@callee, @args) -> super "Call"
 
+class ListNode extends Node
+    constructor: (@els) -> super "List"
+
+class MapNode extends Node
+    constructor: (@map) -> super "Map"
+
 module.exports =
     IfNode: IfNode
     ExprNode: ExprNode
@@ -26,3 +32,5 @@ module.exports =
     VariableNode: VariableNode
     StringNode: StringNode
     CallNode: CallNode
+    ListNode: ListNode
+    MapNode: MapNode
