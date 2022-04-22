@@ -1,7 +1,7 @@
 { Token } = require "./lexer"
 
 { NumberNode, IfNode, ExprNode, VariableNode,
-  StringNode, CallNode, ListNode, MapNode } = require "./nodes"
+  StringNode, CallNode, ListNode, MapNode, UnaryNode } = require "./nodes"
 
 Array::first = -> @[0]
 Array::last = -> @[@length - 1]
@@ -28,7 +28,11 @@ returnUntilMatching = (type, tokens) ->
 
 operatorMap =
     "+": precedence: 1, assoc: "Left"
+    "-": precedence: 1, assoc: "Left"
     "*": precedence: 2, assoc: "Left"
+    "/": precedence: 2, assoc: "Left"
+    "u-": precedence: 2, assoc: "Right"
+    "unot": precedence: 0, assoc: "Right"
 parseExpression = (tokens) ->
     output = []; operators = []
     previousToken = null
@@ -39,14 +43,22 @@ parseExpression = (tokens) ->
             when "Identifier" then output.push parseIdentifier token
             when "String" then output.push parseString token
             when "Operator"
-                while operators.length and (do operators.last).type is "Operator" and
-                    (operatorMap[(do operators.last).value].precedence > operatorMap[token.value].precedence or
-                    (operatorMap[(do operators.last).value].precedence is operatorMap[token.value].precedence and
-                    operatorMap[token.value].assoc is "Left"))
-                        output.push parseOperator do operators.pop
-                operators.push token
+                if not previousToken or previousToken.type in ["Operator", "ParenLeft"]
+                    if token.value in ["-", "not", "~", "++", "--"]
+                        token.value = "u" + token.value
+                        operators.push token
+                    else
+                        console.error "Unexpected Operator"
+                        process.exit 1
+                else
+                    while operators.length and (do operators.last).type is "Operator" and
+                        (operatorMap[(do operators.last).value].precedence > operatorMap[token.value].precedence or
+                        (operatorMap[(do operators.last).value].precedence is operatorMap[token.value].precedence and
+                        operatorMap[token.value].assoc is "Left"))
+                            output.push parseOperator do operators.pop
+                    operators.push token
             when "ParenLeft"
-                if not previousToken or previousToken.type is "Operator"
+                if not previousToken or previousToken.type in "Operator"
                     operators.push token
                 else
                     [args, tokens] = returnUntilMatching "Paren", tokens
@@ -71,14 +83,20 @@ parseExpression = (tokens) ->
 
     rpnStack = []
     for node from output
-        if node.type is "Expr"
-            node.rhs = do rpnStack.pop; node.lhs = do rpnStack.pop
-            rpnStack.push node
-        else
-            rpnStack.push node
+        switch node.type
+            when "Expr"
+                node.rhs = do rpnStack.pop; node.lhs = do rpnStack.pop
+                rpnStack.push node
+            when "Unary"
+                node.rhs = do rpnStack.pop
+                rpnStack.push node
+            else
+                rpnStack.push node
     do rpnStack.first
 
-parseOperator = (token) -> new ExprNode null, null, token.value
+parseOperator = (token) ->
+    if token.value.startsWith "u" then new UnaryNode null, token.value
+    else new ExprNode null, null, token.value
 parseNumber = (token) -> new NumberNode Number token.value
 parseIdentifier = (token) -> new VariableNode token.value
 parseString = (token) -> new StringNode token.value
@@ -119,5 +137,16 @@ parseKeyword = (tokens) ->
         when "Match" then parseMatch
         when "Return" then parseReturn
         when "Break" then parseBreak) tokens
+
+fixed = (str) -> value: str, type: "fixed"
+method = (fn) -> value: fn, type: "method"
+sequence = (els, tokens) ->
+    els.filter (el) -> el.type is "fixed"
+        .reduce (([tokens, ac], el) ->
+            index = tokens.findIndex (t) -> t.value is el.value
+            [tokens[i..], [...ac, ]]), [tokens, []]
+
+parseIf = (tokens) ->
+    sequence [(fixed "If"), (method parseExpression), (fixed "Then"), (method parse), (fixed "End")], tokens
 
 module.exports = parseExpression

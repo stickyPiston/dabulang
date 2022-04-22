@@ -1,5 +1,5 @@
 token_types =
-    "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and)/m
+    "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/m
     "Number": /^[0-9]+/m
     "Keyword": ///
             ^(As|For|Type|Group|Enum|To|
