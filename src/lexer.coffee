@@ -4,7 +4,7 @@ token_types =
     "Keyword": ///
             ^(As|For|Type|Group|Enum|To|
             Then|End|While|Until|Func|Match|
-            When|Return|Else|If|Otherwise|By|Break)
+            When|Return|ElseIf|Else|If|Otherwise|By|Break)
         ///m
     "Identifier": /^[a-zA-Z_][a-zA-Z0-9_]*/m
     "String": /^".*?"/ms

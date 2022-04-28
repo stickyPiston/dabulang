@@ -4,14 +4,51 @@ class Node
     constructor: (@type) ->
 
 class IfNode extends Node
-    constructor: (@cond, @ifProgram, @elseProgram) -> super "If"
-    toString: -> "If #{cond} Then #{ifProgram} End"
+    constructor: (@bodies, @elseProgram = null) -> super "If"
+    toString: -> "If #{@cond} Then #{@ifProgram} End" # TODO
+
+class WhileNode extends Node
+    constructor: (@cond, @program) -> super "While"
+    toString: -> "While #{@cond} Then #{@program} End"
+
+class UntilNode extends Node
+    constructor: (@cond, @program) -> super "Until"
+    toString: -> "Until #{@cond} Then #{@program} End"
+
+class ReturnNode extends Node
+    constructor: (@expr) -> super "Return"
+    toString: -> "Return #{@expr};"
+
+class BreakNode extends Node
+    constructor: -> super "Break"
+    toString: -> "Break;"
+
+class GroupNode extends Node
+    constructor: (@name, @fields) -> super "Group"
+    toString: -> "Type #{@name} = Group #{@fields.map(({ name, type }) -> "#{name} As #{type}").join ", "};"
+
+class EnumNode extends Node
+    constructor: (@name, @values) -> super "Enum"
+    toString: -> "Type #{@name} = Enum #{@values.join ", "};"
+
+class AliasNode extends Node
+    constructor: (@name, @type) -> super "Alias"
+    toString: -> "Type #{@name} = #{@type};"
+
+class FuncNode extends Node
+    constructor: (@name, @params, @retType, @body) -> super "Func"
+    toString: -> "Func #{@name}(#{@params.map((p) -> "#{p.name} As #{p.type}").join ", "}) As #{@retType} #{@body} End"
+
+class ForNode extends Node
+    constructor: (@variable, @startValue, @endValue, @incr, @body) -> super "For"
+    toString: ->
+        "For #{@variable} #{if @startValue? then "= " + @startValue} To #{@endValue} #{if @incr? then "By " + @incr} Then #{@body} End"
 
 class ExprNode extends Node
     constructor: (@lhs, @rhs, @operator) -> super "Expr"
     toString: ->
-        lhs = if isPrimitive @lhs then do @lhs.toString else "(#{do @lhs.toString})"
-        rhs = if isPrimitive @rhs then do @rhs.toString else "(#{do @rhs.toString})"
+        lhs = if isPrimitive @lhs or @lhs.type is "Unary" then do @lhs.toString else "(#{do @lhs.toString})"
+        rhs = if isPrimitive @rhs or @rhs.type is "Unary" then do @rhs.toString else "(#{do @rhs.toString})"
         "#{lhs} #{@operator} #{rhs}"
 
 class UnaryNode extends Node
@@ -55,3 +92,11 @@ module.exports =
     CallNode: CallNode
     ListNode: ListNode
     MapNode: MapNode
+    WhileNode: WhileNode
+    UntilNode: UntilNode
+    ReturnNode: ReturnNode
+    GroupNode: GroupNode
+    EnumNode: EnumNode
+    AliasNode: AliasNode
+    FuncNode: FuncNode
+    ForNode: ForNode
