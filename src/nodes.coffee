@@ -1,4 +1,4 @@
-isPrimitive = (node) -> node.type in ["Number", "Variable", "List", "Map", "Call"]
+isPrimitive = (node) -> node.type in ["Number", "Variable", "List", "Map", "Call", "String"]
 
 class Node
     constructor: (@type) ->
@@ -9,11 +9,11 @@ class IfNode extends Node
 
 class WhileNode extends Node
     constructor: (@cond, @program) -> super "While"
-    toString: -> "While #{@cond} Then #{@program} End"
+    toString: -> "While #{@cond} Then\n#{@program.join "\n"} End"
 
 class UntilNode extends Node
     constructor: (@cond, @program) -> super "Until"
-    toString: -> "Until #{@cond} Then #{@program} End"
+    toString: -> "Until #{@cond} Then\n#{@program.join "\n"} End"
 
 class ReturnNode extends Node
     constructor: (@expr) -> super "Return"
@@ -37,19 +37,25 @@ class AliasNode extends Node
 
 class FuncNode extends Node
     constructor: (@name, @params, @retType, @body) -> super "Func"
-    toString: -> "Func #{@name}(#{@params.map((p) -> "#{p.name} As #{p.type}").join ", "}) As #{@retType} #{@body} End"
+    toString: -> "Func #{@name}(#{@params.map((p) -> "#{p.name} As #{p.type}").join ", "}) As #{@retType}\n#{@body.join "\n"} End"
 
 class ForNode extends Node
     constructor: (@variable, @startValue, @endValue, @incr, @body) -> super "For"
     toString: ->
-        "For #{@variable} #{if @startValue? then "= " + @startValue} To #{@endValue} #{if @incr? then "By " + @incr} Then #{@body} End"
+        "For #{@variable} #{if @startValue? then "= " + @startValue} To #{@endValue} #{if @incr? then "By " + @incr} Then\n#{@body.map (s) -> s + ";"}\nEnd"
+
+class MatchNode extends Node
+    constructor: (@variable, @blocks, @otherwise = null) -> super "Match"
+    toString: ->
+        "Match #{@variable} Then\n#{@blocks.map((b) -> "When #{b.cond} Then #{b.prog.map (s) -> s + ";"} End").join "\n"} #{if @otherwise? then "\nOtherwise " + @otherwise.map (s) -> s + ";"}\nEnd"
 
 class ExprNode extends Node
     constructor: (@lhs, @rhs, @operator) -> super "Expr"
     toString: ->
         lhs = if isPrimitive @lhs or @lhs.type is "Unary" then do @lhs.toString else "(#{do @lhs.toString})"
         rhs = if isPrimitive @rhs or @rhs.type is "Unary" then do @rhs.toString else "(#{do @rhs.toString})"
-        "#{lhs} #{@operator} #{rhs}"
+        if @operator is "." then "#{lhs}.#{rhs}"
+        else "#{lhs} #{@operator} #{rhs}"
 
 class UnaryNode extends Node
     constructor: (@rhs, @operator) -> super "Unary"
@@ -100,3 +106,4 @@ module.exports =
     AliasNode: AliasNode
     FuncNode: FuncNode
     ForNode: ForNode
+    MatchNode: MatchNode

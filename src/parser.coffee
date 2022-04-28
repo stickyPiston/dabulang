@@ -1,21 +1,11 @@
-{ Token, lex } = require "./lexer"
+{ Token } = require "./lexer"
 
 { NumberNode, IfNode, ExprNode, VariableNode, WhileNode, AliasNode
   UntilNode, GroupNode, EnumNode, StringNode, CallNode, FuncNode
-  ListNode, MapNode, UnaryNode, ReturnNode, ForNode } = require "./nodes"
+  ListNode, MapNode, UnaryNode, ReturnNode, ForNode, MatchNode } = require "./nodes"
 
 Array::first = -> @[0]
 Array::last = -> @[@length - 1]
-
-parse = (tokens) ->
-    nodes = []
-    while tokens.length
-        [node, tokens] = parseOne tokens
-        nodes.push node
-
-parseOne = (tokens) ->
-    if (do tokens.first).type is "Keyword" then parseKeyword tokens
-    else parseExpression tokens
 
 returnUntilMatching = (type, tokens) ->
     index = 1; level = 0
@@ -25,9 +15,13 @@ returnUntilMatching = (type, tokens) ->
             when "#{type}Left" then level++
             when "#{type}Right" then level--
         index++
+        if index >= tokens.length
+            console.error "Unbalanced braces"
+            process.exit 1
     [tokens[1..index - 1], tokens[index..]]
 
 operatorMap =
+    ".": precedence: 3, assoc: "Left"
     "+": precedence: 1, assoc: "Left"
     "-": precedence: 1, assoc: "Left"
     "*": precedence: 2, assoc: "Left"
@@ -49,6 +43,7 @@ parseExpression = (tokens) ->
                         token.value = "u" + token.value
                         operators.push token
                     else
+                        console.log previousToken, tokens
                         console.error "Unexpected Operator"
                         process.exit 1
                 else
@@ -63,6 +58,7 @@ parseExpression = (tokens) ->
                     operators.push token
                 else
                     [args, tokens] = returnUntilMatching "Paren", tokens
+                    previousToken = new Token ")", "ParenRight"
                     output.push parseFunctionCall (do output.pop), args
             when "ParenRight"
                 output.push parseOperator do operators.pop while (do operators.last).type isnt "ParenLeft"
@@ -78,8 +74,8 @@ parseExpression = (tokens) ->
             else
                 console.error "Unexpected " + token.type
                 process.exit 1
-        previousToken = token
-        do tokens.shift
+        if (do output.last).type isnt "Call" then previousToken = token
+        tokens = tokens[1..]
     output.push parseOperator do operators.pop while operators.length
 
     rpnStack = []
@@ -127,18 +123,6 @@ parseMapLiteral = (tokens) ->
         .reduce ((ac, el) -> { ...ac, [el[0][0].value]: parseExpression el[1]}), {})
         # FIXME: Assert that the left-hand side of a map literal pair is an identifier
 
-parseKeyword = (tokens) ->
-    (switch (do tokens.first).value
-        when "If" then parseIf
-        when "For" then parseFor
-        when "Until" then parseWhile doUntil: no
-        when "While" then parseWhile doUntil: yes
-        when "Func" then parseFunc
-        when "Match" then parseMatch
-        when "Return" then parseReturn
-        when "Break" then parseBreak
-        when "Type" then parseTypeDef) tokens
-
 type = (ty) -> (input) -> if input[0]?.type is ty then [input[0], input[1..]] else null
 value = (val) -> (input) -> if input[0]?.value is val then [input[0], input[1..]] else null
 
@@ -168,7 +152,7 @@ repeat = (parser) -> (input) ->
     if res.length then [res, input] else null
 
 expression = (input) ->
-    [(parseExpression (do input.shift while input.length and not (input[0].type in ["Semicolon", "Keyword"]))), input]
+    [(parseExpression (([token, input...] = input; token) while input.length and not (input[0].type in ["Semicolon", "Keyword"]))), input]
 
 program = ({ delimitedBy }) -> (input) ->
     level = 0; tokens = []
@@ -181,7 +165,7 @@ program = ({ delimitedBy }) -> (input) ->
         if input[0].value is "End" then level--
         [token, input...] = input
         tokens.push token
-    [tokens, input]
+    [(parse tokens), input]
 
 fmap = (parser, fn) -> (input) ->
     if result = parser input then [(fn result[0]), result[1]]
@@ -194,11 +178,11 @@ parseDeclaration =
 parseGroup =
     fmap (seq (value "Type"), (type "Identifier"), (value "="), (value "Group"),
         (sepBy (type "Comma"), parseDeclaration), (type "Semicolon")),
-            ([_1, name, _2, _3, fields, _4]) -> new GroupNode name.value, fields.value
+            ([_1, name, _2, _3, fields, _4]) -> new GroupNode name.value, fields
 
 parseWhile = ({ doUntil }) ->
     fmap (seq (if doUntil then value "Until" else value "While"), expression, (value "Then"), program delimitedBy: value "End"),
-        ([_1, cond, _2, block]) -> new (if doUntil then UntilNode else WhileNode) cond, parseExpression block
+        ([_1, cond, _2, block]) -> new (if doUntil then UntilNode else WhileNode) cond, block
 
 parseReturn = fmap (seq (value "Return"), expression, (type "Semicolon")),
     ([_1, expr, _2]) -> new ReturnNode expr
@@ -218,20 +202,20 @@ parseFunc = fmap (seq (value "Func"), (type "Identifier"), (value "("),
     (sepBy (type "Comma"), parseDeclaration), (value ")"), (value "As"),
     (type "Identifier"), program delimitedBy: value "End"),
         ([_1, name, _2, params, _3, _4, retType, body]) ->
-            new FuncNode name.value, params, retType.value, (parseReturn body)[0]
+            new FuncNode name.value, params, retType.value, body
 
 parseFor = any \
     (fmap (seq (value "For"), (type "Identifier"), (value "To"), expression, (value "Then"), program delimitedBy: value "End"),
-        ([_1, variable, _2, endValue, _3, body]) -> new ForNode variable.value, null, endValue, (new NumberNode 1), parseExpression body),
+        ([_1, variable, _2, endValue, _3, body]) -> new ForNode variable.value, null, endValue, (new NumberNode 1), body),
     (fmap (seq (value "For"), (type "Identifier"), (value "="), expression, (value "To"),
         expression, (value "Then"), program delimitedBy: value "End"),
-            ([_1, variable, _2, startValue, _3, endValue, _4, body]) -> new ForNode variable.value, startValue, endValue, (new NumberNode 1), parseExpression body),
+            ([_1, variable, _2, startValue, _3, endValue, _4, body]) -> new ForNode variable.value, startValue, endValue, (new NumberNode 1), body),
     (fmap (seq (value "For"), (type "Identifier"), (value "="), expression, (value "To"), expression,
         (value "By"), expression, (value "Then"), program delimitedBy: value "End"),
             ([_1, variable, _2, startValue, _3, endValue, _4, incr, _5, body]) ->
-                new ForNode variable.value, startValue, endValue, incr, parseExpression body),
+                new ForNode variable.value, startValue, endValue, incr, body),
     (fmap (seq (value "For"), (type "Identifier"), (value "To"), expression, (value "By"), expression, (value "Then"), program delimitedBy: value "End"),
-        ([_1, variable, _2, endValue, _3, incr, _4, body]) -> new ForNode variable.value, null, endValue, incr, parseExpression body)
+        ([_1, variable, _2, endValue, _3, incr, _4, body]) -> new ForNode variable.value, null, endValue, incr, body)
 
 parseIf = any \
     (fmap (seq (value "If"), expression, (value "Then"), program delimitedBy: value "End"),
@@ -245,25 +229,18 @@ parseIf = any \
         (program delimitedBy: value "Else"), program delimitedBy: value "End"),
             ([_1, cond, _2, blocks, finalBlock, elseBlock]) -> new IfNode [...(blocks.map (g) -> g[0]), finalBlock], elseBlock)
 
-# console.log parseIf lex "If a Then b ElseIf c Then d ElseIf e Then f Else g End"
+parseMatch = any \
+    (fmap (seq (value "Match"), expression, (value "Then"), (repeat seq (value "When"), expression,
+        (value "Then"), program delimitedBy: value "End"), value "End"),
+            (_1, variable, _2, blocks, _3) -> new MatchNode variable, blocks.map ([_1, cond, _2, prog]) -> { cond, prog }),
+    (fmap (seq (value "Match"), expression, (value "Then"), (repeat seq (value "When"),
+        expression, (value "Then"), program delimitedBy: value "End"), (value "Otherwise"), (program delimitedBy: value "End"), value "End"),
+            ([_1, variable, _2, blocks, _3, otherwise, _4]) -> new MatchNode variable, (blocks.map ([_1, cond, _2, prog]) -> { cond, prog }), otherwise)
 
-# console.log parseFor lex "For i = 0 To 5 Then b End"
+parseOne = any parseIf, parseFor, (parseWhile doUntil: yes), (parseWhile doUntil: no), parseFunc, parseMatch,
+    parseReturn, parseBreak, parseTypeDef, fmap (seq expression, value ";"), ([expr, _]) -> expr
 
-# console.log parseTypeDef [
-#         (new Token "Type", "Keyword"), (new Token "Colour", "Identifier"), (new Token "=", "Operator"),
-#         (new Token "Enum", "Keyword"), (new Token "Red", "Identifier"), (new Token ",", "Comma"),
-#         (new Token "Green", "Identifier"), (new Token ",", "Comma"), (new Token "Blue", "Identifier"), (new Token ";", "Semicolon")
-#     ]
+parse = (input) ->
+    (input = result[1]; result[0]) while result = parseOne input
 
-# console.log (parseWhile doUntil: no) [
-#         (new Token "While", "Keyword"), (new Token "a", "Identifier"), (new Token "Then", "Keyword"),
-#         (new Token "b", "Identifier"), (new Token "End", "Keyword"), (new Token "If", "Keyword")
-#     ]
-# console.log (parseGroup [
-#         (new Token "Type", "Keyword"), (new Token "Person", "Identifier"), (new Token "=", "Operator"),
-#         (new Token "Group", "Keyword"), (new Token "name", "Identifier"), (new Token "As", "Keyword"),
-#         (new Token "String", "Identifier"), (new Token ",", "Comma"), (new Token "age", "Identifier"),
-#         (new Token "As", "Keyword"), (new Token "Natural", "Identifier"), (new Token ";", "Semicolon")
-#     ])[0]
-
-module.exports = parseExpression
+module.exports = parse
