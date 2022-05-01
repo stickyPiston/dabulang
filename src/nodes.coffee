@@ -49,6 +49,10 @@ class MatchNode extends Node
     toString: ->
         "Match #{@variable} Then\n#{@blocks.map((b) -> "When #{b.cond} Then #{b.prog.map (s) -> s + ";"} End").join "\n"} #{if @otherwise? then "\nOtherwise " + @otherwise.map (s) -> s + ";"}\nEnd"
 
+class BreakNode extends Node
+    constructor: -> super "Break"
+    toString: "Break;"
+
 class ExprNode extends Node
     constructor: (@lhs, @rhs, @operator) -> super "Expr"
     toString: ->
@@ -107,3 +111,4 @@ module.exports =
     FuncNode: FuncNode
     ForNode: ForNode
     MatchNode: MatchNode
+    BreakNode: BreakNode

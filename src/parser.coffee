@@ -1,7 +1,7 @@
 { Token } = require "./lexer"
 
 { NumberNode, IfNode, ExprNode, VariableNode, WhileNode, AliasNode
-  UntilNode, GroupNode, EnumNode, StringNode, CallNode, FuncNode
+  UntilNode, GroupNode, EnumNode, StringNode, CallNode, FuncNode, BreakNode
   ListNode, MapNode, UnaryNode, ReturnNode, ForNode, MatchNode } = require "./nodes"
 
 Array::first = -> @[0]
@@ -9,7 +9,6 @@ Array::last = -> @[@length - 1]
 
 returnUntilMatching = (type, tokens) ->
     index = 1; level = 0
-    # FIXME: Assert there are tokens left to read
     while tokens[index].type isnt "#{type}Right" or level isnt 0
         switch tokens[index].type
             when "#{type}Left" then level++
@@ -21,11 +20,19 @@ returnUntilMatching = (type, tokens) ->
     [tokens[1..index - 1], tokens[index..]]
 
 operatorMap =
-    ".": precedence: 3, assoc: "Left"
-    "+": precedence: 1, assoc: "Left"
-    "-": precedence: 1, assoc: "Left"
-    "*": precedence: 2, assoc: "Left"
-    "/": precedence: 2, assoc: "Left"
+    "=": precedence: 0, assoc: "Right"
+    ".": precedence: 5, assoc: "Left"
+    "+": precedence: 3, assoc: "Left"
+    "-": precedence: 3, assoc: "Left"
+    "*": precedence: 4, assoc: "Left"
+    "/": precedence: 4, assoc: "Left"
+    "<": precedence: 2, assoc: "Left"
+    ">": precedence: 2, assoc: "Left"
+    ">=": precedence: 2, assoc: "Left"
+    "<=": precedence: 2, assoc: "Left"
+    "==": precedence: 2, assoc: "Left"
+    "and": precedence: 1, assoc: "Right"
+    "or": precedence: 1, assoc: "Right"
     "u-": precedence: 2, assoc: "Right"
     "unot": precedence: 0, assoc: "Right"
 parseExpression = (tokens) ->
@@ -72,6 +79,7 @@ parseExpression = (tokens) ->
                 [literal, tokens] = returnUntilMatching "Curly", tokens
                 output.push parseMapLiteral literal
             else
+                console.log tokens
                 console.error "Unexpected " + token.type
                 process.exit 1
         if (do output.last).type isnt "Call" then previousToken = token
@@ -86,6 +94,7 @@ parseExpression = (tokens) ->
                 rpnStack.push node
             when "Unary"
                 node.rhs = do rpnStack.pop
+                node.operator = node.operator[1..]
                 rpnStack.push node
             else
                 rpnStack.push node
@@ -114,7 +123,7 @@ splitOnComma = (tokens) -> leveledSplit tokens, (t) -> t.type is "Comma"
 parseFunctionCall = (lastNode, tokens) ->
     new CallNode lastNode, (parseExpression arg for arg from splitOnComma tokens)
 parseListLiteral = (tokens) ->
-    new ListNode (parseExpression arg for arg from splitOnComma tokens)
+    new ListNode (if tokens.length then (parseExpression arg for arg from splitOnComma tokens) else [])
 parseMapLiteral = (tokens) ->
     new MapNode (splitOnComma tokens
         .map (l) ->
@@ -161,7 +170,7 @@ program = ({ delimitedBy }) -> (input) ->
         if (delimitedBy input) and level is 0
             [_, input...] = input
             break
-        if input[0].value in ["If", "While", "For", "Match", "Func", "ElseIf", "Else"] then level++
+        if input[0].value in ["If", "While", "For", "Match", "Func", "When", "Otherwise", "Until"] then level++
         if input[0].value is "End" then level--
         [token, input...] = input
         tokens.push token
@@ -218,16 +227,16 @@ parseFor = any \
         ([_1, variable, _2, endValue, _3, incr, _4, body]) -> new ForNode variable.value, null, endValue, incr, body)
 
 parseIf = any \
+    (fmap (seq (value "If"), expression, (value "Then"), (repeat seq (program delimitedBy: value "ElseIf"), expression, value "Then"),
+        (program delimitedBy: value "Else"), program delimitedBy: value "End"),
+            ([_1, cond, _2, blocks, finalBlock, elseBlock]) -> new IfNode [...(blocks.map (g, i) -> cond: blocks[i-1]?[1] or cond, prog: g[0]), cond: (do blocks.last)[1], prog: finalBlock], elseBlock),
+    (fmap (seq (value "If"), expression, (value "Then"), (repeat seq (program delimitedBy: value "ElseIf"), expression, value "Then"),
+        program delimitedBy: value "End"),
+            ([_1, cond, _2, blocks, finalBlock]) -> new IfNode [...(blocks.map (g, i) -> cond: blocks[i-1]?[1] or cond, prog: g[0]), cond: (do blocks.last)[1], prog: finalBlock]),
     (fmap (seq (value "If"), expression, (value "Then"), program delimitedBy: value "End"),
         ([_1, cond, _2, prog]) -> new IfNode [cond: cond, prog: prog]),
     (fmap (seq (value "If"), expression, (value "Then"), (program delimitedBy: value "Else"), program delimitedBy: value "End"),
-        ([_1, cond, _2, prog, elseProg]) -> new IfNode [cond: cond, prog: prog], elseProg),
-    (fmap (seq (value "If"), expression, (value "Then"), (repeat seq (program delimitedBy: value "ElseIf"), expression, value "Then"),
-        program delimitedBy: value "End"),
-            ([_1, cond, _2, blocks, finalBlock]) -> new IfNode [...(blocks.map (g) -> g[0]), finalBlock]),
-    (fmap (seq (value "If"), expression, (value "Then"), (repeat seq (program delimitedBy: value "ElseIf"), expression, value "Then"),
-        (program delimitedBy: value "Else"), program delimitedBy: value "End"),
-            ([_1, cond, _2, blocks, finalBlock, elseBlock]) -> new IfNode [...(blocks.map (g) -> g[0]), finalBlock], elseBlock)
+        ([_1, cond, _2, prog, elseProg]) -> new IfNode [cond: cond, prog: prog], elseProg)
 
 parseMatch = any \
     (fmap (seq (value "Match"), expression, (value "Then"), (repeat seq (value "When"), expression,
