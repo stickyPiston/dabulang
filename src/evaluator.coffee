@@ -1,23 +1,25 @@
-evaluate = (nodes) -> evaluateOne node for node from nodes
+breaked = no; returned = undefined
 
-scope = {}
-breaked = no
+evaluate = (nodes, scope) ->
+    for node in nodes
+        evaluateOne node, scope
+        if returned then return returned
 
-evaluateOne = (node) ->
+evaluateOne = (node, scope) ->
     switch node.type
         when "Number", "String" then node.value
-        when "List" then (evaluateOne el for el from node.els)
-        when "Map" then unions ({ [key]: evaluateOne val } for key, val of node.map)
+        when "List" then (evaluateOne el, scope for el from node.els)
+        when "Map" then unions ({ [key]: evaluateOne val, scope } for key, val of node.map)
         when "Variable" then scope[node.name]
         when "Expr"
             if node.operator is "="
                 switch node.lhs.type
                     when "Variable"
-                        scope[node.lhs.name] = evaluateOne node.rhs
+                        scope[node.lhs.name] = evaluateOne node.rhs, scope
                     when "Call"
-                        scope[node.lhs.callee][evaluateOne node.lhs.args[0]] = evaluateOne node.rhs
+                        scope[node.lhs.callee][evaluateOne node.lhs.args[0], scope] = evaluateOne node.rhs, scope
             else
-                lhs = evaluateOne node.lhs; rhs = evaluateOne node.rhs
+                lhs = evaluateOne node.lhs, scope; rhs = evaluateOne node.rhs, scope
                 switch node.operator
                     when "+" then lhs + rhs
                     when "-" then lhs - rhs
@@ -31,47 +33,38 @@ evaluateOne = (node) ->
                     when "and" then lhs and rhs
                     when "or" then lhs or rhs
         when "Unary"
-            rhs = evaluateOne rhs
+            rhs = evaluateOne rhs, scope
             switch node.operator
                 when "-" then -rhs
                 when "not" then not rhs
         when "Call"
-            switch node.callee?.name
-                when "print" then console.log evaluateOne arg for arg from node.args
-                when "len"
-                    arg = evaluateOne node.args[0]
-                    if arg.length? then arg.length
-                when "push"
-                    arg = evaluateOne node.args[0]
-                    if Array.isArray arg then arg.push evaluateOne node.args[1]
-                when "fromAscii" then fromCharCode evaluateOne node.args[0]
-                when "toAscii" then (evaluateOne node.args[0]).charCodeAt 0
-                when "Number" then Number evaluateOne node.args[0]
-                when "remove" then (evaluateOne node.args[0]).splice evaluateOne node.args[1]
-                else
-                    func = evaluateOne node.callee
-                    if (Array.isArray func) or typeof func is "string" then func[evaluateOne node.args[0]]
+            func = evaluateOne node.callee, scope
+            if (Array.isArray func) or typeof func is "string" then func[evaluateOne node.args[0], scope]
+            else if typeof func is "object" then func[evaluateOne node.args[0], scope]
+            else if typeof func is "function" then func ...(evaluateOne arg, scope for arg from node.args)
         when "If"
-            return evaluate prog for { cond, prog } from node.bodies when evaluateOne cond
-            evaluate node.elseProgram if node.elseProgram?
-        when "While" then evaluate node.program while not breaked and evaluateOne node.cond; breaked = no
-        when "Until" then evaluate node.program until breaked or evaluateOne node.cond; breaked = no
+            return evaluate prog, scope for { cond, prog } from node.bodies when evaluateOne cond, scope
+            evaluate node.elseProgram, scope if node.elseProgram?
+        when "While" then evaluate node.program, scope while not breaked and evaluateOne node.cond, scope; breaked = no
+        when "Until" then evaluate node.program, scope until breaked or evaluateOne node.cond, scope; breaked = no
         when "For"
-            if node.startValue? then scope[node.variable] = evaluateOne node.startValue
-            while not breaked and scope[node.variable] < evaluateOne node.endValue
-                evaluate node.body
-                scope[node.variable] += evaluateOne node.incr
+            if node.startValue? then scope[node.variable] = evaluateOne node.startValue, scope
+            while not breaked and scope[node.variable] < evaluateOne node.endValue, scope
+                evaluate node.body, scope
+                scope[node.variable] += evaluateOne node.incr, scope # FIXME: Allow for automatic decrement
             breaked = no
         when "Match"
-            return evaluate prog for { cond, prog } from node.blocks when (evaluateOne node.variable) is evaluateOne cond
-            evaluate node.otherwise
+            return evaluate prog, scope for { cond, prog } from node.blocks when (evaluateOne node.variable, scope) is evaluateOne cond, scope
+            evaluate node.otherwise, scope
         when "Break" then breaked = yes
+        when "Func"
+            scope[node.name] = (...args) ->
+                newScope = { ...scope, ...(args.reduce ((ac, arg, i) -> { ...ac, [node.params[i].name]: arg }), {}) }
+                res = evaluate node.body, newScope
+                returned = no
+                res
+        when "Return" then returned = evaluateOne node.expr, scope
 
+unions = (objs) -> objs.reduce ((ac, obj) -> { ...ac, ...obj }), {}
 
-unions = (objs) ->
-    res = {}
-    res[key] = value for key, value of obj \
-        when not (key of res) for obj from objs
-    res
-
-module.exports = evaluate
+module.exports = { evaluateOne, evaluate }

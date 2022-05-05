@@ -1,6 +1,7 @@
 { lex } = require "./lexer"
 parse = require "./parser"
-evaluate = require "./evaluator"
+{ evaluate } = require "./evaluator"
+scope = require "./intrinsics"
 
 source = '
 source = "13 + 5 * 4"; i = 0; tokens = [];
@@ -24,9 +25,7 @@ While i < len(source) Then
         i = i + 1;
     End
 End
-
 ops = ["*", "+"];
-
 For i = 0 To len(ops) Then
     For j = 0 To len(tokens) Then
         If ops(i) == tokens(j) Then
@@ -39,8 +38,7 @@ For i = 0 To len(ops) Then
         End
     End
 End
-
 print(tokens(0));
 '
 
-evaluate parse lex source
+evaluate (parse lex source), scope
