@@ -172,6 +172,7 @@ Expression ::= Literal                              -- (see 1.3)
              | Function-call                        -- (see 2.3)
              | Expression binary-operand Expression
              | unary-operand Expression
+             | Anonymous-function                   -- (see 2.17)
              | '(' Expression ')'
 ```
 
@@ -364,6 +365,20 @@ Type AnnotatedTuple[Ts...] = Tuple[Natural, Ts...];
 #### 2.16 Tuples
 
 Tuples are like unnamed groups, they store a combination of different types in order. For instance, let `t` be a `Tuple[String, Natural, List[Real]]`, then `t` stores a string, number and a list in a single value. There is no theoretical limit as to how many elements a tuple can hold. To access an element from a tuple, you can use the function call notation to select an element by index. Given `t` from earlier, `t(0)` would yield a `String`. There is a special case when you do `t(a)` where `a` is an arbitrary `Natural`, the return type is then `Either[String, Natural, List[Real]]`, because `a` could be the index of any element. Tuples are instantiated with the `Tuple` constructor call.
+
+#### 2.17 Anonymous functions
+
+Anonymous functions are functions without names. The main difference with function definitions is that a function definition is considered as a statement whereas an anonymous function is considered as an expression. Anonymous functions are useful when a small function is needed for instance in an argument list.
+
+``` Dabulang
+map([10, 20, 30], Func (a) Return a + 10; End);
+```
+
+The grammar for anynomous functions is
+
+``` ebnf
+Anonymous-function ::= 'Func' '(' Params ')' program 'End'
+```
 
 ### 3. Type system
 

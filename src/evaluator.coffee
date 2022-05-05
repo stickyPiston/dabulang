@@ -61,8 +61,7 @@ evaluateOne = (node, scope) ->
             scope[node.name] = (...args) ->
                 newScope = { ...scope, ...(args.reduce ((ac, arg, i) -> { ...ac, [node.params[i].name]: arg }), {}) }
                 res = evaluate node.body, newScope
-                returned = no
-                res
+                returned = no; res
         when "Return" then returned = evaluateOne node.expr, scope
 
 unions = (objs) -> objs.reduce ((ac, obj) -> { ...ac, ...obj }), {}

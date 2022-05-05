@@ -78,8 +78,14 @@ parseExpression = (tokens) ->
             when "CurlyLeft"
                 [literal, tokens] = returnUntilMatching "Curly", tokens
                 output.push parseMapLiteral literal
+            when "Keyword"
+                if token.value is "Func"
+                    [func, tokens] = parseAnonFunc tokens
+                    output.push func
+                else
+                    console.error "Unexpected Keyword"
+                    process.exit 1
             else
-                console.log tokens
                 console.error "Unexpected " + token.type
                 process.exit 1
         if (do output.last).type isnt "Call" then previousToken = token
@@ -161,7 +167,24 @@ repeat = (parser) -> (input) ->
     if res.length then [res, input] else null
 
 expression = (input) ->
-    [(parseExpression (([token, input...] = input; token) while input.length and not (input[0].type in ["Semicolon", "Keyword"]))), input]
+    tokens = []; level = 0
+    while input.length
+        if input[0].value is "Func"
+            while input.length
+                if input[0].value in ["If", "While", "For", "Match", "Func", "When", "Otherwise", "Until"] then level++
+                if input[0].value is "End" then level--
+                if input[0].value is "End" and level is 0
+                    [token, input...] = input
+                    tokens.push token
+                    break
+                [token, input...] = input
+                tokens.push token
+        else
+            if input[0].type in ["Semicolon", "Keyword"] then break
+            [token, input...] = input
+            tokens.push token
+    [(parseExpression tokens), input]
+    # [(parseExpression (([token, input...] = input; token) while input.length and not (input[0].value in [";", "To", "By", "Then"]))), input]
 
 program = ({ delimitedBy }) -> (input) ->
     level = 0; tokens = []
@@ -207,11 +230,15 @@ parseTypeAlias = fmap (seq (value "Type"), (type "Identifier"), (value "="), (ty
 
 parseTypeDef = any parseGroup, parseEnum, parseTypeAlias
 
-parseFunc = fmap (seq (value "Func"), (type "Identifier"), (value "("),
-    (sepBy (type "Comma"), parseDeclaration), (value ")"), (value "As"),
-    (type "Identifier"), program delimitedBy: value "End"),
-        ([_1, name, _2, params, _3, _4, retType, body]) ->
-            new FuncNode name.value, params, retType.value, body
+parseFunc = any \
+    (fmap (seq (value "Func"), (type "Identifier"), (value "("),
+        (sepBy (type "Comma"), parseDeclaration), (value ")"), (value "As"),
+        (type "Identifier"), program delimitedBy: value "End"),
+            ([_1, name, _2, params, _3, _4, retType, body]) ->
+                new FuncNode name.value, params, retType.value, body),
+    (fmap (seq (value "Func"), (type "Identifier"), (value "("),
+        (sepBy (value ","), (type "Identifier")), (value ")"), program delimitedBy: value "End"),
+            ([_1, name, _2, params, _3, body]) -> new FuncNode name.value, (params.map (p) -> name: p.value), null, body)
 
 parseFor = any \
     (fmap (seq (value "For"), (type "Identifier"), (value "To"), expression, (value "Then"), program delimitedBy: value "End"),
@@ -245,6 +272,10 @@ parseMatch = any \
     (fmap (seq (value "Match"), expression, (value "Then"), (repeat seq (value "When"),
         expression, (value "Then"), program delimitedBy: value "End"), (value "Otherwise"), (program delimitedBy: value "End"), value "End"),
             ([_1, variable, _2, blocks, _3, otherwise, _4]) -> new MatchNode variable, (blocks.map ([_1, cond, _2, prog]) -> { cond, prog }), otherwise)
+
+parseAnonFunc =
+    (fmap (seq (value "Func"), (value "("), (sepBy (value ","), (type "Identifier")), (value ")"), program delimitedBy: value "End"),
+        ([_1, _2, params, _3, body]) -> new FuncNode null, (params.map (p) -> name: p.value), null, body)
 
 parseOne = any parseIf, parseFor, (parseWhile doUntil: yes), (parseWhile doUntil: no), parseFunc, parseMatch,
     parseReturn, parseBreak, parseTypeDef, fmap (seq expression, value ";"), ([expr, _]) -> expr
