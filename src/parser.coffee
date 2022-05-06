@@ -50,7 +50,6 @@ parseExpression = (tokens) ->
                         token.value = "u" + token.value
                         operators.push token
                     else
-                        console.log previousToken, tokens
                         console.error "Unexpected Operator"
                         process.exit 1
                 else
@@ -127,7 +126,7 @@ leveledSplit = (tokens, fn) ->
 splitOnComma = (tokens) -> leveledSplit tokens, (t) -> t.type is "Comma"
 
 parseFunctionCall = (lastNode, tokens) ->
-    new CallNode lastNode, (parseExpression arg for arg from splitOnComma tokens)
+    new CallNode lastNode, (parseExpression arg for arg from splitOnComma tokens).filter Boolean
 parseListLiteral = (tokens) ->
     new ListNode (if tokens.length then (parseExpression arg for arg from splitOnComma tokens) else [])
 parseMapLiteral = (tokens) ->
@@ -184,7 +183,6 @@ expression = (input) ->
             [token, input...] = input
             tokens.push token
     [(parseExpression tokens), input]
-    # [(parseExpression (([token, input...] = input; token) while input.length and not (input[0].value in [";", "To", "By", "Then"]))), input]
 
 program = ({ delimitedBy }) -> (input) ->
     level = 0; tokens = []

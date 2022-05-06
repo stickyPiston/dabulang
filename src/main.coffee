@@ -2,16 +2,20 @@
 parse = require "./parser"
 { evaluate } = require "./evaluator"
 scope = require "./intrinsics"
+fs = require "fs"
 
-source = '
-Func map(list, f)
-    For i = 0 To len(list) Then
-        list(i) = f(list(i));
-    End
-    Return list;
-End
+args = process.argv[2..]
+filename = ""
+`for (let i = 0; i < args.length; i++) {`
+switch args[i]
+    when "-h"
+        console.log "
+        Dabulang CLI:
+        npm start <filename> | -h
+        "
+        process.exit 0
+    else filename = args[i]
+`}`
 
-print(map([10, 20, 30], Func (a) Return a + 10; End));
-'
-
+source = do (fs.readFileSync filename).toString
 evaluate (parse lex source), scope

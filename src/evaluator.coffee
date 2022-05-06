@@ -59,7 +59,7 @@ evaluateOne = (node, scope) ->
         when "Break" then breaked = yes
         when "Func"
             scope[node.name] = (...args) ->
-                newScope = { ...scope, ...(args.reduce ((ac, arg, i) -> { ...ac, [node.params[i].name]: arg }), {}) }
+                newScope = { ...scope, ...(args.reduce ((ac, arg, i) -> { ...ac, [node.params[i]?.name or "_"]: arg }), {}) }
                 res = evaluate node.body, newScope
                 returned = no; res
         when "Return" then returned = evaluateOne node.expr, scope

@@ -1,0 +1,41 @@
+Func map(list, f)
+    For i = 0 To len(list) Then
+        list(i) = f(list(i));
+    End
+    Return list;
+End
+
+Func filter(list, f)
+    newList = [];
+    For i = 0 To len(list) Then
+        If f(list(i), i) Then
+            push(newList, list(i));
+        End
+    End
+    Return newList;
+End
+
+Func range(start, end)
+    list = []; index = 0;
+    If start < end Then
+        While start < end Then
+            list(index) = start;
+            start = start + 1;
+            index = index + 1;
+        End
+    Else
+        While start > end Then
+            list(index) = start;
+            start = start - 1;
+            index = index + 1;
+        End
+    End
+    Return list;
+End
+
+Func add(a)
+    Return Func (b) Return a + b; End;
+End
+
+print(filter(map(range(10, 30), add(10)),
+    Func (a) Return a < 35; End));

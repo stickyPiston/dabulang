@@ -1,21 +1,17 @@
 token_types =
-    "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/m
-    "Number": /^[0-9]+/m
-    "Keyword": ///
-            ^(As|For|Type|Group|Enum|To|
-            Then|End|While|Until|Func|Match|
-            When|Return|ElseIf|Else|If|Otherwise|By|Break)
-        ///m
-    "Identifier": /^[a-zA-Z_][a-zA-Z0-9_]*/m
-    "String": /^".*?"/ms
-    "ParenLeft": /^\(/m
-    "ParenRight": /^\)/m
-    "SquareLeft": /^\[/m
-    "SquareRight": /^\]/m
-    "CurlyLeft": /^\{/m
-    "CurlyRight": /^\}/m
-    "Semicolon": /^;/m
-    "Comma": /^,/m
+    "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/
+    "Number": /^[0-9]+/
+    "Keyword": /^(As|For|Type|Group|Enum|To|Then|End|While|Until|Func|Match|When|Return|ElseIf|Else|If|Otherwise|By|Break)/
+    "Identifier": /^[a-zA-Z_][a-zA-Z0-9_]*/
+    "String": /^".*?"/s
+    "ParenLeft": /^\(/
+    "ParenRight": /^\)/
+    "SquareLeft": /^\[/
+    "SquareRight": /^\]/
+    "CurlyLeft": /^\{/
+    "CurlyRight": /^\}/
+    "Semicolon": /^;/
+    "Comma": /^,/
 
 lex = (source) ->
     tokens = []
