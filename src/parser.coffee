@@ -70,7 +70,6 @@ parseExpression = (tokens) ->
                 output.push parseOperator do operators.pop while (do operators.last).type isnt "ParenLeft"
                 do operators.pop # Discard (
                 # FIXME: Assert that operators isn't empty while popping
-                # TODO: If there is an function identifier on the operator stack, pop it too
             when "SquareLeft"
                 [literal, tokens] = returnUntilMatching "Square", tokens
                 output.push parseListLiteral literal
@@ -89,7 +88,13 @@ parseExpression = (tokens) ->
                 process.exit 1
         if (do output.last).type isnt "Call" then previousToken = token
         tokens = tokens[1..]
-    output.push parseOperator do operators.pop while operators.length
+
+    while operators.length
+        t = do operators.pop
+        if t.type.startsWith "Paren"
+            console.error "Mismatched brackets"
+            process.exit 1
+        else output.push parseOperator t
 
     rpnStack = []
     for node from output

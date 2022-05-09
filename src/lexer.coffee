@@ -1,3 +1,5 @@
+{ error } = require "./error"
+
 token_types =
     "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/
     "Number": /^[0-9]+/
@@ -14,20 +16,23 @@ token_types =
     "Comma": /^,/
 
 lex = (source) ->
-    tokens = []
+    tokens = []; sourceIndex = 0
     while source.length
         lexed_token = no
         for token_type of token_types
+            lengthBfrTrim = source.length
             source = do source.trim
+            sourceIndex += lengthBfrTrim - source.length
             if matches = source.match token_types[token_type]
-                tokens.push new Token matches[0], token_type
-                source = source.substr matches[0].length
+                tokens.push new Token matches[0], token_type, sourceIndex
+                source = source[matches[0].length..]
+                sourceIndex += matches[0].length
                 lexed_token = yes
                 break
 
         unless lexed_token
-            console.error "Unknown token at " + source
-            process.exit 1
+            error "Unknown token " + source[0], sourceIndex
+            sourceIndex++; source = source[1..]
     tokens
 
 class Token

@@ -3,6 +3,7 @@ parse = require "./parser"
 { evaluate } = require "./evaluator"
 scope = require "./intrinsics"
 fs = require "fs"
+{ reportIfErrors } = require "./error"
 
 args = process.argv[2..]
 filename = ""
@@ -17,5 +18,8 @@ switch args[i]
     else filename = args[i]
 `}`
 
-source = do (fs.readFileSync filename).toString
-evaluate (parse lex source), scope
+source = do (fs.readFileSync filename).toString; res = source
+fns = [lex, parse, evaluate]
+for fn from fns
+    res = fn res, scope
+    reportIfErrors source
