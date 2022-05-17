@@ -3,7 +3,10 @@
 token_types =
     "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/
     "Number": /^[0-9]+/
-    "Keyword": /^(As|For|Type|Group|Enum|To|Then|End|While|Until|Func|Match|When|Return|ElseIf|Else|If|Otherwise|By|Break)/
+    "Keyword": ///
+        ^(As|For|Type|Group|Enum|To|Then|End|While|Until|Func|
+        Match|When|Return|ElseIf|Else|If|Otherwise|By|Break)
+        ///
     "Identifier": /^[a-zA-Z_][a-zA-Z0-9_]*/
     "String": /^".*?"/s
     "ParenLeft": /^\(/
@@ -24,7 +27,7 @@ lex = (source) ->
             source = do source.trim
             sourceIndex += lengthBfrTrim - source.length
             if matches = source.match token_types[token_type]
-                tokens.push new Token matches[0], token_type, sourceIndex
+                tokens.push new Token matches[0], token_type, tokens.length, sourceIndex
                 source = source[matches[0].length..]
                 sourceIndex += matches[0].length
                 lexed_token = yes
@@ -36,7 +39,7 @@ lex = (source) ->
     tokens
 
 class Token
-    constructor: (@value, @type) ->
+    constructor: (@value, @type, @tokenIndex, @sourceIndex) ->
         @value = @value[1..-2] if @type is "String"
 
 module.exports =

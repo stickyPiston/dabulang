@@ -2,6 +2,7 @@ isPrimitive = (node) -> node.type in ["Number", "Variable", "List", "Map", "Call
 
 class Node
     constructor: (@type) ->
+    toString: -> ""
 
 class IfNode extends Node
     constructor: (@bodies, @elseProgram = null) -> super "If"
@@ -32,8 +33,8 @@ class EnumNode extends Node
     toString: -> "Type #{@name} = Enum #{@values.join ", "};"
 
 class AliasNode extends Node
-    constructor: (@name, @type) -> super "Alias"
-    toString: -> "Type #{@name} = #{@type};"
+    constructor: (@name, @aliasee) -> super "Alias"
+    toString: -> "Type #{@name} = #{@aliasee};"
 
 class FuncNode extends Node
     constructor: (@name, @params, @retType, @body) -> super "Func"
@@ -42,16 +43,12 @@ class FuncNode extends Node
 class ForNode extends Node
     constructor: (@variable, @startValue, @endValue, @incr, @body) -> super "For"
     toString: ->
-        "For #{@variable} #{if @startValue? then "= " + @startValue} To #{@endValue} #{if @incr? then "By " + @incr} Then\n#{@body.map (s) -> s + ";"}\nEnd"
+        "For #{@variable} #{if @startValue? then "= " + String @startValue else ""} To #{String @endValue} #{if @incr? then "By " + String @incr else ""} Then\n#{(@body.map (s) -> (String s) + ";").join ""}\nEnd"
 
 class MatchNode extends Node
     constructor: (@variable, @blocks, @otherwise = null) -> super "Match"
     toString: ->
         "Match #{@variable} Then\n#{@blocks.map((b) -> "When #{b.cond} Then #{b.prog.map (s) -> s + ";"} End").join "\n"} #{if @otherwise? then "\nOtherwise " + @otherwise.map (s) -> s + ";"}\nEnd"
-
-class BreakNode extends Node
-    constructor: -> super "Break"
-    toString: "Break;"
 
 class ExprNode extends Node
     constructor: (@lhs, @rhs, @operator) -> super "Expr"
