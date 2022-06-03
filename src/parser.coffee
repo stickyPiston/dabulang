@@ -72,10 +72,10 @@ term = (stream) ->
         throw new Error "Expected (" unless stream.match value: "("
         params = []
         if stream.match type: "Identifier"
-            params.push stream.previous.value
+            params.push name: stream.previous.value
             while stream.match value: ","
                 throw new Error "Expected Identifier" unless stream.match type: "Identifier"
-                params.push stream.previous.value
+                params.push name: stream.previous.value
         throw new Error "Expected )" unless stream.match value: ")"
         body = program stream
         throw new Error "Expected End" unless stream.match value: "End"
@@ -135,10 +135,10 @@ parse_func = statement_parser (stream) ->
     throw new Error "Expected (" unless stream.match value: "("
     params = []
     if stream.match type: "Identifier"
-        params.push stream.previous.value
+        params.push name: stream.previous.value
         while stream.match value: ","
             throw new Error "Expected Identifier" unless stream.match type: "Identifier"
-            params.push stream.previous.value
+            params.push name: stream.previous.value
     throw new Error "Expected )" unless stream.match value: ")"
     body = program stream
     throw new Error "Expected End" unless stream.match value: "End"
@@ -221,6 +221,7 @@ statement = (stream) ->
 program = (stream) ->
     stmt while stmt = statement stream
 
-fs = require "fs"
-source = do (fs.readFileSync "examples/test.dabu").toString
-console.log (program new Stream lex source).map((n) -> do n.toString).join "\n"
+# fs = require "fs"
+# source = do (fs.readFileSync "examples/test.dabu").toString
+# console.log (program new Stream lex source).map((n) -> do n.toString).join "\n"
+module.exports = { parse: program, Stream }

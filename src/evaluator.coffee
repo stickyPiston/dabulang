@@ -43,7 +43,7 @@ evaluateOne = (node, scope) ->
             else if typeof func is "object" then func[evaluateOne node.args[0], scope]
             else if typeof func is "function" then func ...(evaluateOne arg, scope for arg from node.args)
         when "If"
-            return evaluate prog, scope for { cond, prog } from node.bodies when evaluateOne cond, scope
+            return evaluate body, scope for { cond, body } from node.bodies when evaluateOne cond, scope
             evaluate node.elseProgram, scope if node.elseProgram?
         when "While" then evaluate node.program, scope while not breaked and evaluateOne node.cond, scope; breaked = no
         when "Until" then evaluate node.program, scope until breaked or evaluateOne node.cond, scope; breaked = no

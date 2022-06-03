@@ -1,5 +1,5 @@
 { lex } = require "./lexer"
-parse = require "./parser"
+{ parse, Stream } = require "./parser"
 { evaluate } = require "./evaluator"
 scope = require "./intrinsics"
 fs = require "fs"
@@ -19,7 +19,4 @@ switch args[i]
 `}`
 
 source = do (fs.readFileSync filename).toString; res = source
-fns = [lex, parse, evaluate]
-for fn from fns
-    res = fn res, scope
-    reportIfErrors source
+evaluate (parse new Stream lex source), scope
