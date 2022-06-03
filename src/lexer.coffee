@@ -16,6 +16,7 @@ token_types =
     "CurlyLeft": /^\{/
     "CurlyRight": /^\}/
     "Semicolon": /^;/
+    "Colon": /^:/
     "Comma": /^,/
 
 lex = (source) ->
