@@ -50,10 +50,11 @@ term = (stream) ->
     else if stream.check type: "Number" then new NumberNode Number (do stream.next).value
     else if stream.match value: "["
         elements = []
-        loop
-            elements.push (do assignment) stream
-            break unless stream.match value: ","
-        throw new Error "Expected ]" unless stream.match value: "]"
+        unless stream.match value: "]"
+            loop
+                elements.push (do assignment) stream
+                break unless stream.match value: ","
+            throw new Error "Expected ]" unless stream.match value: "]"
         new ListNode elements
     else if stream.match value: "{"
         elements = {}
@@ -67,6 +68,18 @@ term = (stream) ->
         new MapNode elements
     else if stream.check type: "String"
         new StringNode (do stream.next).value
+    else if stream.match value: "Func"
+        throw new Error "Expected (" unless stream.match value: "("
+        params = []
+        if stream.match type: "Identifier"
+            params.push stream.previous.value
+            while stream.match value: ","
+                throw new Error "Expected Identifier" unless stream.match type: "Identifier"
+                params.push stream.previous.value
+        throw new Error "Expected )" unless stream.match value: ")"
+        body = program stream
+        throw new Error "Expected End" unless stream.match value: "End"
+        new FuncNode null, params, null, body
     else if stream.match value: "("
         expr = (do assignment) stream
         throw new Error "Expected )" unless stream.match value: ")"
@@ -208,14 +221,6 @@ statement = (stream) ->
 program = (stream) ->
     stmt while stmt = statement stream
 
-source = "
-Type Maybe[T] = Either[T, Nothing];
-Type Person = Group name, age;
-Type Profession = Enum Programmer, Student, Teacher;
-If not e Then a = (b + c) + i * d; ElseIf j(10, 20) Then k / l; Else [10, 20, 30, 20 + 20]; End
-While f and u Then g + h; Break; End
-For p = 0 To 20 By 4 Then o = p + o; End
-Match q When 10 Then 20; End When 20 Then \"30\"; End Otherwise q; End End
-Func r(s, t) Return { v: s + t }; End
-"
+fs = require "fs"
+source = do (fs.readFileSync "examples/test.dabu").toString
 console.log (program new Stream lex source).map((n) -> do n.toString).join "\n"
