@@ -2,7 +2,7 @@ Func map(list, f)
     For i = 0 To len(list) Then
         list(i) = f(list(i));
     End
-    Return list;
+    Return list if;
 End
 
 Func filter(list, f)

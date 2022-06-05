@@ -38,7 +38,7 @@ class AliasNode extends Node
 
 class FuncNode extends Node
     constructor: (@name, @params, @retType, @body) -> super "Func"
-    toString: -> "Func #{@name or ""}(#{@params.join ", "}) #{@body.map (s) -> s + ";"} End"
+    toString: -> "Func #{@name or ""}(#{(@params.map (p) -> p.name).join ", "}) #{(@body.map (s) -> s + ";").join " "} End"
 
 class ForNode extends Node
     constructor: (@variable, @startValue, @endValue, @incr, @body) -> super "For"

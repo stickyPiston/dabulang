@@ -1,22 +1,27 @@
-errors = []
+class Errors
+    constructor: (@errors) -> @name = "Errors"; @message = ""
 
-error = (desc, loc) -> errors.push desc: desc, location: loc
+class LexError extends Error
+    constructor: (message, source_index, source) ->
+        super message; @name = "LexingError"
+        lines = source[..source_index - 1].split "\n"
+        @row = lines.length; @col = lines[lines.length - 1].length
 
-indexToLocation = (location, source) ->
-    line = 1; col = 1; index = 0
-    while index < location
-        if source[index] is "\n"
-            line++; col = 1;
-        else if source[index] isnt "\r"
-            col++;
-        index++
-    { line, col: col - 1 }
+class ParseError extends Error
+    constructor: (message, stream) ->
+        super message; @name = "ParseError"
+        @row = stream.peek.row; @col = stream.peek.col
 
-reportIfErrors = (source) ->
-    if errors.length
-        for error from errors
-            loc = indexToLocation error.location, source
-            console.error "[ ERROR ]: #{error.desc} at #{loc.line}:#{loc.col}"
-        process.exit 1
+report_error = (error, source) ->
+    if error instanceof ParseError or error instanceof LexError
+        line = (source.split "\n")[error.row - 1]
+        indentation = line.length - (do line.trim).length
+        arrow = (" ".repeat (error.row + ": ").length) + ("~".repeat (if error.col is 0 then 0 else error.col - 1 - indentation)) + "^"
+        console.error "#{error.name}: #{error.message} at #{error.row}:#{error.col}\n#{error.row}: #{do line.trim}\n#{arrow}"
 
-module.exports = { error, reportIfErrors }
+report_errors = (error, source) ->
+    if error instanceof Errors then report_errors single_error, source for single_error from error.errors
+    else if error instanceof LexError or error instanceof ParseError then report_error error, source
+    else console.error error
+
+module.exports = { Errors, LexError, ParseError, report_errors }

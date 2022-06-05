@@ -1,4 +1,4 @@
-{ error } = require "./error"
+{ LexError, Errors } = require "./error"
 
 token_types =
     "Operator": /^((\*|\+|\.|\/|-|=|<|>|%|!|\||&|\^)+|or|and|not)/
@@ -20,29 +20,30 @@ token_types =
     "Comma": /^,/
 
 lex = (source) ->
-    tokens = []; sourceIndex = 0
+    original_source = source
+    tokens = []; errors = []; sourceIndex = 0
     while source.length
         lexed_token = no
+        lengthBfrTrim = source.length
+        source = do source.trim
+        sourceIndex += lengthBfrTrim - source.length
         for token_type of token_types
-            lengthBfrTrim = source.length
-            source = do source.trim
-            sourceIndex += lengthBfrTrim - source.length
             if matches = source.match token_types[token_type]
-                tokens.push new Token matches[0], token_type, tokens.length, sourceIndex
+                tokens.push new Token matches[0], token_type, tokens.length, sourceIndex, original_source
                 source = source[matches[0].length..]
                 sourceIndex += matches[0].length
                 lexed_token = yes
                 break
 
         unless lexed_token
-            error "Unknown token " + source[0], sourceIndex
+            errors.push new LexError "Unknown token " + source[0], sourceIndex, original_source
             sourceIndex++; source = source[1..]
-    tokens
+    if errors.length then throw new Errors errors else tokens
 
 class Token
-    constructor: (@value, @type, @tokenIndex, @sourceIndex) ->
+    constructor: (@value, @type, @tokenIndex, @sourceIndex, source) ->
         @value = @value[1..-2] if @type is "String"
+        lines = source[..@sourceIndex - 1].split "\n"
+        @row = lines.length; @col = lines[lines.length - 1].length
 
-module.exports =
-    lex: lex
-    Token: Token
+module.exports = { lex, Token }

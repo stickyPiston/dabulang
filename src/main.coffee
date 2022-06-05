@@ -3,7 +3,7 @@
 { evaluate } = require "./evaluator"
 scope = require "./intrinsics"
 fs = require "fs"
-{ reportIfErrors } = require "./error"
+{ report_errors } = require "./error"
 
 args = process.argv[2..]
 filename = ""
@@ -18,5 +18,8 @@ switch args[i]
     else filename = args[i]
 `}`
 
-source = do (fs.readFileSync filename).toString; res = source
-evaluate (parse new Stream lex source), scope
+try
+    source = do (fs.readFileSync filename).toString; res = source
+    evaluate (parse new Stream lex source), scope
+catch error
+    report_errors error, source
