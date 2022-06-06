@@ -14,10 +14,14 @@ class ParseError extends Error
 
 report_error = (error, source) ->
     if error instanceof ParseError or error instanceof LexError
-        line = (source.split "\n")[error.row - 1]
-        indentation = line.length - (do line.trim).length
-        arrow = (" ".repeat (error.row + ": ").length) + ("~".repeat (if error.col is 0 then 0 else error.col - 1 - indentation)) + "^"
-        console.error "#{error.name}: #{error.message} at #{error.row}:#{error.col}\n#{error.row}: #{do line.trim}\n#{arrow}"
+        if error.row is undefined and error.col is undefined
+            lines = source.split "\n"
+            console.error "Unexpected EOF at #{lines.length}:#{lines[lines.length - 1].length + 1}"
+        else
+            line = (source.split "\n")[error.row - 1]
+            indentation = line.length - (do line.trim).length
+            arrow = (" ".repeat (error.row + ": ").length) + ("~".repeat (if error.col is 0 then 0 else error.col - 1 - indentation)) + "^"
+            console.error "#{error.name}: #{error.message} at #{error.row}:#{error.col}\n#{error.row}: #{do line.trim}\n#{arrow}"
 
 report_errors = (error, source) ->
     if error instanceof Errors then report_errors single_error, source for single_error from error.errors

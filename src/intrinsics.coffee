@@ -8,3 +8,4 @@ module.exports =
     toAscii: (str) -> str.charCodeAt 0
     Number: Number
     remove: (list, index) -> list.splice index
+    fill: (list, count, value) -> list[i] = value for i in [0..count]

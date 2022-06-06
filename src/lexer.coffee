@@ -29,7 +29,7 @@ lex = (source) ->
         sourceIndex += lengthBfrTrim - source.length
         for token_type of token_types
             if matches = source.match token_types[token_type]
-                tokens.push new Token matches[0], token_type, tokens.length, sourceIndex, original_source
+                tokens.push new Token do matches[0].trim, token_type, tokens.length, sourceIndex, original_source
                 source = source[matches[0].length..]
                 sourceIndex += matches[0].length
                 lexed_token = yes
