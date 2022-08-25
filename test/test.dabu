@@ -1,0 +1,15 @@
+Func map[T, U](l As List[T], fn As (T) -> U) As List[U]
+    "Changing 'As List[U]' to 'Let List[T]' yields an error 'Could not match types'";
+    "I will work on the error messages, don't worry";
+
+    Let result As List[U] = []; 
+    "Changing Let to Const will yield an error 'Cannot assign to const variable'";
+
+    For i = 0 To length(l) Then
+        result(i) = fn(l(i));
+        "Changing result to l yields the error 'Expected T as rhs of assignment (now U)'";
+    End
+
+    Return result;
+    "Changing result to l will yield another 'Could not match types' error";
+End
