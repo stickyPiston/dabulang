@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Ast where
 
@@ -6,83 +8,101 @@ import qualified Data.HashMap.Strict as M
 import Data.Text (Text, intercalate, pack, unpack)
 import TextShow (TextShow(showb, showt), toText, fromString, fromText, Builder)
 import Data.HashMap.Strict (mapWithKey, elems)
+import Text.Megaparsec (SourcePos)
 
 data Type
-    = Base Text
-    | Func [Type] Type
-    | Appl Type [Type]
-    | Var Int
-    | Group (M.HashMap Text Type) [Type]
-    | Enum [Text]
-    | Alias Text Type
+    = Base { nameT :: Text }
+    | Func { paramTypes :: [(Maybe Text, Type)], retType :: Type }
+    | Appl { base :: Type, argTypes :: [Type] }
+    | Var { nameT :: Text, index :: Int }
+    | Group { nameT :: Text, fieldTypes :: M.HashMap Text Type, extends :: [Text] }
+    | Enum { nameT :: Text, names :: [Text] }
+    | Alias { nameT :: Text, aliasee :: Type }
+    | None
     deriving Eq
 instance TextShow Type where
     showb (Base name) = fromText name
-    showb (Func params ret) = "(" <> (intercalateBuilder ", " $ map showb params) <> ") -> " <> showb ret
-    showb (Appl base args) = showb base <> "[" <> (intercalateBuilder ", " $ map showb args) <> "]"
-    showb (Var i) = "$" <> showb i
-    showb (Group fields supers) = "Group " <> (intercalateBuilder ", " . M.elems $ M.mapWithKey (\k v -> showb k <> " As " <> showb v) fields)
-    showb (Enum fields) = "Enum " <> showb (intercalate "," fields)
+    showb (Func params ret) = "(" <> intercalateBuilder ", " (map (showb . snd) params) <> ") -> " <> showb ret
+    showb (Appl base args) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
+    showb (Var name _) = fromText name
+    showb (Group _ fields supers) = "Group " <> (intercalateBuilder ", " . M.elems $ M.mapWithKey (\k v -> showb k <> " As " <> showb v) fields)
+    showb (Enum _ fields) = "Enum " <> showb (intercalate "," fields)
     showb (Alias name aliasee) = showb name <> " => " <> showb aliasee
+    showb None = "None"
 instance Show Type where show = unpack . showt
 
-type Body i = [Stmt i]
-data Stmt i
-    = If [(ExprWith i, Body i)] (Maybe (Body i))
-    | Loop Bool (ExprWith i) (Body i)
-    | Return (ExprWith i)
+data Span = Span { startLocation :: SourcePos, endLocation :: SourcePos }
+    deriving Show
+
+data IfMatchBody = IfMatchBody { cond :: Expr, condLocation :: Span, body :: Body }
+    deriving Show
+data LetBinding = LetBinding { name :: Text, nameLocation :: Span, annotation :: Maybe Type
+    , annotationLocation :: Maybe Span, value :: Expr }
+instance TextShow LetBinding where
+    showb (LetBinding name _ anon _ val) = fromText name <> maybe "" ((" As " <>) . showb) anon <> " = " <> showb val
+
+type Body = [Stmt]
+data Stmt
+    = If { bodies :: [IfMatchBody], elseLocation :: Maybe Span, elseProg :: Maybe Body }
+    | Loop { isUntil :: Bool, condU :: Expr, bodyU :: Body }
+    | Return { value :: Expr }
     | Break
-    | GroupDef Text (M.HashMap Text Type) [Text]
-    | EnumDef Text [Text]
-    | AliasDef Text Type
-    | FuncDef Text (M.HashMap Text Type) Type (Body i)
-    | For Text (Maybe (ExprWith i)) (ExprWith i) (Maybe (ExprWith i)) (Body i)
-    | Match (ExprWith i) [(ExprWith i, Body i)] (Maybe (Body i))
-    | Let Bool Text (Maybe Type) (ExprWith i)
-    | ExprStmt (ExprWith i)
-instance TextShow i => TextShow (Stmt i) where
-    showb (If ((cond, body) : bodies) else_) = "If " <> showb cond <> " Then " <> showb body
-        <> mconcat (map (\(cond, body) -> "Else If " <> showb cond <> " Then " <> showb body) bodies)
+    | GroupDef { name :: Text, nameLocation :: Span, fields :: M.HashMap Text (Type, Span)
+               , extends :: [(Text, Span)] }
+    | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
+    | AliasDef { name :: Text, nameLocation :: Span, aliasee :: Type }
+    | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))]
+              , retType :: Type, retTypeLocation :: Span, bodyFu :: Body }
+    | For { variable :: Text, variableLocation :: Span, startValue :: Maybe Expr
+          , endValue :: Expr, byValue :: Maybe Expr, bodyFo :: Body }
+    | Match { value :: Expr, bodies :: [IfMatchBody]
+            , other :: Maybe Body }
+    | Let { isConst :: Bool, bindings :: [LetBinding] }
+    | ExprStmt { expr :: Expr }
+instance TextShow Stmt where
+    showb (If ((IfMatchBody cond _ body) : bodies) _ else_) = "If " <> showb cond <> " Then " <> showb body
+        <> mconcat (map (\(IfMatchBody cond _ body) -> "Else If " <> showb cond <> " Then " <> showb body) bodies)
         <> maybe "" (("Else" <>) . showb) else_
         <> " End"
     showb (Loop is_until cond body) = (if is_until then "Until " else "While ")
         <> showb cond <> " Then " <> showb body <> " End"
     showb (Return expr) = "Return " <> showb expr <> ";"
     showb Break = "Break"
-    showb (FuncDef name params ret_type body) = "Func " <> fromText name <> "("
-        <> intercalateBuilder ", " (elems $ mapWithKey (\k v -> fromText k <> " As " <> showb v) params) <> ")"
+    showb (FuncDef name _ params ret_type _ body) = "Func " <> fromText name <> "("
+        <> intercalateBuilder ", " (map (\(k, (v, _)) -> fromText k <> " As " <> showb v) params) <> ")"
         <> " As " <> showb ret_type <> " " <> showb body <> " End"
-    showb (For var start end by body) = "For " <> fromText var <> (maybe "" ((" = " <>) . showb) start)
-        <> " To " <> showb end <> (maybe "" ((" By " <>) . showb) by) <> " Then " <> showb body <> " End"
-    showb (Let is_const name type_ expr) = (if is_const then "Const " else "Let ") <> fromText name
-        <> (maybe "" ((" As " <>) . showb) type_) <> " = " <> showb expr <> ";"
+    showb (For var _ start end by body) = "For " <> fromText var <> maybe "" ((" = " <>) . showb) start
+        <> " To " <> showb end <> maybe "" ((" By " <>) . showb) by <> " Then " <> showb body <> " End"
+    showb (Let is_const bindings) = (if is_const then "Const " else "Let ") <>
+        intercalateBuilder ", " (map showb bindings) <> ";"
     showb (ExprStmt expr) = showb expr <> ";"
-instance (TextShow i, Show i) => Show (Stmt i) where show = unpack . showt
+instance Show Stmt where show = unpack . showt
 
-data Expr i
-    = Number Int
-    | String Text
-    | Variable Text
-    | Binary (ExprWith i) (ExprWith i) Text
-    | Unary (ExprWith i) Text
-    | Call (ExprWith i) [ExprWith i]
-    | List [ExprWith i]
-    | Dict [(ExprWith i, ExprWith i)]
-    | Specialisation (ExprWith i) [Type]
+data Expr
+    = Number { type_ :: Type, location :: Span, nValue :: Int }
+    | String { type_ :: Type, location :: Span, sValue :: Text }
+    | Variable { type_ :: Type, location :: Span, name :: Text }
+    | Binary { type_ :: Type, lhs :: Expr, rhs :: Expr, op :: Text, opLocation :: Span, location :: Span }
+    | Unary { type_ :: Type, rhs :: Expr, op :: Text, opLocation :: Span, location :: Span }
+    | Call { type_ :: Type, callee :: Expr, args :: [Expr], leftParenLocation :: Span, location :: Span }
+    | List { type_ :: Type, location :: Span, els :: [Expr] }
+    | Dict { type_ :: Type, kvpairs :: [(Expr, Expr)], location :: Span }
+    | Specialisation { type_ :: Type, base :: Expr, types :: [Type], location :: Span }
+    | Char { type_ :: Type, location :: Span, cValue :: Char }
+
 intercalateBuilder :: Builder -> [Builder] -> Builder
 intercalateBuilder _ [] = fromText ""
-intercalateBuilder t (e : []) = e
+intercalateBuilder t [e] = e
 intercalateBuilder t (e : es) = e <> t <> intercalateBuilder t es
-instance TextShow i => TextShow (Expr i) where
-    showb (Number n) = showb n
-    showb (String s) = "\"" <> fromText s <> "\""
-    showb (Variable name) = fromText name
-    showb (Binary l r o) = showb l <> " " <> fromText o <> " " <> showb r
-    showb (Unary l o) = fromText o <> showb l
-    showb (Call callee args) = showb callee <> "(" <> mconcat (map showb args) <> ")"
-    showb (List els) = "[" <> intercalateBuilder "," (map showb els) <> "]"
-    showb (Dict els) = "{" <> intercalateBuilder "," (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
-    showb (Specialisation base args) = showb args <> "[" <> intercalateBuilder "," (map showb args) <> "]"
-data ExprWith i = ExprWith { getExpr :: Expr i , getInfo :: i }
-instance TextShow i => TextShow (ExprWith i) where
-    showb ExprWith { getExpr = getExpr } = showb getExpr
+instance TextShow Expr where
+    showb (Number _ _ n) = showb n
+    showb (String _ _ s) = "\"" <> fromText s <> "\""
+    showb (Variable _ _ name) = fromText name
+    showb (Binary _ l r o _ _) = showb l <> " " <> fromText o <> " " <> showb r
+    showb (Unary _ l o _ _) = fromText o <> showb l
+    showb (Call _ callee args _ _) = showb callee <> "(" <> intercalateBuilder ", " (map showb args) <> ")"
+    showb (List _ _ els) = "[" <> intercalateBuilder "," (map showb els) <> "]"
+    showb (Dict _ els _) = "{" <> intercalateBuilder "," (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
+    showb (Specialisation _ base args _) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
+instance Show Expr where show = unpack.showt
+

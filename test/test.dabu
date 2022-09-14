@@ -1,15 +1,58 @@
-Func map[T, U](l As List[T], fn As (T) -> U) As List[U]
-    "Changing 'As List[U]' to 'Let List[T]' yields an error 'Could not match types'";
-    "I will work on the error messages, don't worry";
-
-    Let result As List[U] = []; 
-    "Changing Let to Const will yield an error 'Cannot assign to const variable'";
-
-    For i = 0 To length(l) Then
-        result(i) = fn(l(i));
-        "Changing result to l yields the error 'Expected T as rhs of assignment (now U)'";
+Func list_fill_with[T](n As Nat, v As T) As List[T]
+    Let r As List[T] = [];
+    For i = 0 To n Then
+        r = cons(v, r);
     End
-
-    Return result;
-    "Changing result to l will yield another 'Could not match types' error";
+    Return r;
 End
+
+Func interp_bf(source_string As String) As Trivial
+    Const upper_limit = 1024, source = to_char_list(source_string);
+    Let pc = 0, mc = 0, mem = list_fill_with(upper_limit, 0);
+    
+    While pc < length(source) Then
+        Match source(pc) Then
+            When '+' Then
+                If mem(mc) == 255 Then mem(mc) = 0;
+                Else mem(mc) = mem(mc) + 1; End
+            End
+            When '-' Then
+                If mem(mc) == 0 Then mem(mc) = 255;
+                Else mem(mc) = mem(mc) - 1; End
+            End
+            When '<' Then
+                If mc == 0 Then mc = upper_limit - 1;
+                Else mc = mc - 1; End
+            End
+            When '>' Then
+                If mc == upper_limit - 1 Then mc = 0;
+                Else mc = mc + 1; End
+            End
+            When '.' Then put_char(from_ascii(mem(mc))); End
+            When '[' Then
+                If mem(mc) == 0 Then
+                    Let level = 0; pc = pc + 1;
+                    Until source(pc) == ']' and level == 0 Then
+                        If source(pc) == '[' Then level = level + 1; End
+                        If source(pc) == ']' Then level = level - 1; End
+                        pc = pc + 1;
+                    End
+                End
+            End
+            When ']' Then
+                If mem(mc) != 0 Then 
+                    Let level = 0; pc = pc - 1;
+                    Until source(pc) == '[' and level == 0 Then
+                        If source(pc) == '[' Then level = level - 1; End
+                        If source(pc) == ']' Then level = level + 1; End
+                        pc = pc - 1;
+                    End
+                End
+            End
+        End
+        pc = pc + 1;
+    End
+End
+
+interp_bf("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.");
+"Prints Hello World!";

@@ -19,7 +19,7 @@ maintainer:         sticcpistt@icloud.com
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+--extra-source-files: 
 
 executable dabulang
     main-is:          Main.hs
@@ -28,10 +28,12 @@ executable dabulang
     other-modules:    Types
                     , Parser
                     , Ast
+                    , Error
+                    , Eval
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base                 >=4.7 && <4.15
+    build-depends:    base
                     , unordered-containers
                     , transformers
                     , mtl
