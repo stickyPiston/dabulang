@@ -3,15 +3,14 @@
 module Main where
 
 import Parser (programP)
-import Text.Megaparsec (parseTest, parse, errorBundlePretty)
+import Text.Megaparsec (parse)
 import System.Environment (getArgs)
-import Data.Text (pack, Text)
 import Types (Env(Env, gamma, delta), inferStmt)
 import Control.Monad.State (StateT(runStateT), evalStateT, MonadIO (liftIO), MonadTrans (lift))
 import Data.HashMap.Strict (empty, fromList)
 import Ast (Type(Func, Base, Appl, Var))
 import Error (printError, Error (ParseError, ICE))
-import Eval (evalStmt, prelude, evalProgram)
+import Eval (prelude, evalProgram)
 import Control.Monad.Trans.Except (runExceptT, ExceptT (ExceptT), except, withExceptT)
 import qualified Data.Text.IO as Text
 

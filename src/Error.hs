@@ -9,7 +9,7 @@ import Text.Megaparsec (SourcePos (..), unPos, ParseErrorBundle, errorBundlePret
 import Ast (Span(..))
 import Data.Void (Void)
 import qualified Data.Text.IO as Text
-import TextShow
+import TextShow ( TextShow(showt) )
 
 data Error
     = TypeError { what :: Text, location :: Span }

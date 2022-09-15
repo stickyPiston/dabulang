@@ -1,38 +1,23 @@
 cabal-version:      2.4
 name:               dabulang
 version:            0.1.0.0
-
--- A short (one-line) description of the package.
--- synopsis:
-
--- A longer description of the package.
--- description:
-
--- A URL where users can report bugs.
--- bug-reports:
-
--- The license under which the package is released.
--- license:
+synopsis:           A simple imperative programming language interpreter
+homepage:           https://github.com/stickyPiston/dabulang
+bug-reports:        https://github.com/stickyPiston/dabulang/issues
 author:             Job Vonk
 maintainer:         sticcpistt@icloud.com
 
--- A copyright notice.
--- copyright:
--- category:
---extra-source-files: 
+extra-source-files: TODO
 
 executable dabulang
     main-is:          Main.hs
 
-    -- Modules included in this executable, other than Main.
     other-modules:    Types
                     , Parser
                     , Ast
                     , Error
                     , Eval
 
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
     build-depends:    base
                     , unordered-containers
                     , transformers

@@ -1,0 +1,30 @@
+* Prelude.hs
+** TODO Create file for unifying prelude implementations and types
+** TODO Design stdlib
+
+* Parser.hs
+** TODO Add parser for dictionary literal
+** TODO Add parser for Loop statement
+** TODO Added parser for newtype aliases
+** TODO Add support for UCFS
+** TODO Change parser errors to custom error scheme
+
+* Types.hs
+** TODO Add proper handling for type aliases
+** TODO Add type checking for newtype aliases
+** TODO code formatting
+** TODO Add support for UCFS
+** TODO Add type checking for group extensions
+** TODO Support multiple error reports
+** TODO Add implicit casts for basic number types
+** TODO Add alpha-conversion for generic type parameters
+
+* Error.hs
+** TODO Add support for multi source-line errors
+
+* Eval.hs
+** TODO Add evaluation for groups and extensions
+** TODO Add evaluation for enums
+** TODO Add evaluation for aliases (both newtype and transparent)
+** TODO Add proper runtime types
+** TODO Add implicit casts for basic number types
