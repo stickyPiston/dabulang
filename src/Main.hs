@@ -8,26 +8,11 @@ import System.Environment (getArgs)
 import Types (Env(Env, gamma, delta), inferStmt)
 import Control.Monad.State (StateT(runStateT), evalStateT, MonadIO (liftIO), MonadTrans (lift))
 import Data.HashMap.Strict (empty, fromList)
-import Ast (Type(Func, Base, Appl, Var))
 import Error (printError, Error (ParseError, ICE))
-import Eval (prelude, evalProgram)
+import Eval (evalProgram)
+import Std ( env, prelude )
 import Control.Monad.Trans.Except (runExceptT, ExceptT (ExceptT), except, withExceptT)
 import qualified Data.Text.IO as Text
-
-env :: Env
-env = Env { gamma = fromList [
-        ("length", (True, Func [(Nothing, Appl (Base "List") [Var "T" 1])] (Base "Nat"))),
-        ("print", (True, Func [(Nothing, Var "T" 1)] (Base "Trivial"))),
-        ("put_char", (True, Func [(Nothing, Base "Char")] (Base "Trivial"))),
-        ("read", (True, Func [(Nothing, Base "String")] (Base "Nat"))),
-        ("True", (True, Base "Bool")),
-        ("False", (True, Base "Bool")),
-        ("cons", (True, Func [(Nothing, Var "T" 1), (Nothing, Appl (Base "List") [Var "T" 1])] (Appl (Base "List") [Var "T" 1]))),
-        ("sole", (True, Base "Trivial")),
-        ("to_char_list", (True, Func [(Nothing, Base "String")] (Appl (Base "List") [Base "Char"]))),
-        ("to_ascii", (True, Func [(Nothing, Base "Char")] (Base "Nat"))),
-        ("from_ascii", (True, Func [(Nothing, Base "Nat")] (Base "Char")))
-    ], delta = empty }
 
 main :: IO ()
 main = do

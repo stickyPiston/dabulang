@@ -9,6 +9,9 @@ import Data.Text (Text, intercalate, pack, unpack)
 import TextShow (TextShow(showb, showt), toText, fromString, fromText, Builder)
 import Data.HashMap.Strict (mapWithKey, elems)
 import Text.Megaparsec (SourcePos)
+import Control.Monad.Except (ExceptT)
+import Control.Monad.State (StateT)
+import Error (Error, Span)
 
 data Type
     = Base { nameT :: Text }
@@ -31,8 +34,6 @@ instance TextShow Type where
     showb None = "None"
 instance Show Type where show = unpack . showt
 
-data Span = Span { startLocation :: SourcePos, endLocation :: SourcePos }
-    deriving Show
 
 data IfMatchBody = IfMatchBody { cond :: Expr, condLocation :: Span, body :: Body }
     deriving Show
@@ -106,3 +107,44 @@ instance TextShow Expr where
     showb (Specialisation _ base args _) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
 instance Show Expr where show = unpack.showt
 
+data Value
+    = VBool { extractBool :: Bool }
+    | VInt { extractInt :: Int }
+    | VNat { extractNat :: Int }
+    | VString { extractString :: Text }
+    | VFunc [Text] Body
+    | VIntrin ([Value] -> Eval Value)
+    | VSole
+    | VList [Value]
+    | VMap [(Value, Value)]
+    | VChar { extractChar :: Char }
+extractNumber :: Value -> Int
+extractNumber (VNat n) = n
+extractNumber (VInt n) = n
+extractNumber e = error $ "Extracting number from " <> show e
+instance Eq Value where
+    VBool a == VBool b = a == b
+    VInt a == VInt b = a == b
+    VNat a == VNat b = a == b
+    VInt a == VNat b = a == b
+    VNat a == VInt b = a == b
+    VString a == VString b = a == b
+    VSole == VSole = True
+    VList a == VList b = a == b
+    VMap a == VMap b = a == b
+    VChar a == VChar b = a == b
+    a == b = False
+instance TextShow Value where
+    showb (VBool b) = showb b
+    showb (VInt n) = showb n
+    showb (VNat n) = showb n
+    showb (VString s) = showb s
+    showb VSole = "sole"
+    showb (VList els) = "[" <> intercalateBuilder ", " (map showb els) <> "]"
+    showb (VChar c) = "'" <> fromString [c] <> "'"
+    showb (VMap els) = "{" <> intercalateBuilder ", " (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
+    showb a = "thing"
+instance Show Value where show = unpack . showt
+
+data RuntimeError = Error Error | ReturnValue Value | BreakLoop
+type Eval = ExceptT RuntimeError (StateT (M.HashMap Text Value) IO)

@@ -11,13 +11,14 @@ import Text.Megaparsec
     , MonadParsec(eof, takeWhileP, try), some, getSourcePos, mkPos, unPos)
 import Control.Monad.Combinators.Expr (makeExprParser, Operator(Postfix, InfixL, Prefix))
 import Data.Void (Void)
-import Ast (Expr(..), Stmt(..), Body, Type(..), Span(..), IfMatchBody (IfMatchBody), LetBinding (..))
+import Ast (Expr(..), Stmt(..), Body, Type(..), IfMatchBody (IfMatchBody), LetBinding (..))
 import Text.Megaparsec.Char (letterChar, alphaNumChar, digitChar, char, string, space, asciiChar)
 import Data.Maybe (fromMaybe)
 import qualified Data.HashMap.Strict as H
 import Text.Read (readMaybe)
 import Data.List (elemIndex)
 import Data.Bifunctor (Bifunctor(first), second)
+import Error (Span(..))
 
 type Parser = Parsec Void Text
 
@@ -58,13 +59,20 @@ listP = do
     els <- between (symbol "[") (symbol "]") (exprP `sepBy` symbol ",")
     end <- getSourcePos
     return $ List None (Span begin end) els
-mapP = undefined -- TODO:
+mapP = do
+    begin <- getSourcePos
+    kvpairs <- between (symbol "{") (symbol "}") (mapElP `sepBy1` symbol ",")
+    end <- getSourcePos
+    return $ Dict None kvpairs (Span begin end)
+    where
+        mapElP :: Parser (Expr, Expr)
+        mapElP = (,) <$> exprP <* symbol ":" <*> exprP
 charP = do
     begin <- getSourcePos
     c <- between (char '\'') (char '\'') asciiChar
     end <- getSourcePos
     return $ Char None (Span begin end) c
-termP = choice [parensP, strlitP, try varP, listP, numberP, charP]
+termP = choice [parensP, strlitP, try varP, listP, numberP, charP, mapP]
 
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =

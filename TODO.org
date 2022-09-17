@@ -3,7 +3,6 @@
 ** TODO Design stdlib
 
 * Parser.hs
-** TODO Add parser for dictionary literal
 ** TODO Add parser for Loop statement
 ** TODO Added parser for newtype aliases
 ** TODO Add support for UCFS

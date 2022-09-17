@@ -6,10 +6,12 @@ module Error where
 import Prelude hiding (length)
 import Data.Text (Text, unpack, pack, length)
 import Text.Megaparsec (SourcePos (..), unPos, ParseErrorBundle, errorBundlePretty)
-import Ast (Span(..))
 import Data.Void (Void)
 import qualified Data.Text.IO as Text
 import TextShow ( TextShow(showt) )
+
+data Span = Span { startLocation :: SourcePos, endLocation :: SourcePos }
+    deriving Show
 
 data Error
     = TypeError { what :: Text, location :: Span }

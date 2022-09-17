@@ -6,7 +6,7 @@ module Eval where
 import Control.Monad.State (StateT, MonadState (..), modify)
 import qualified Data.HashMap.Strict as M
 import Data.Text (Text, unpack, pack)
-import Ast (Expr (..), Stmt (..), IfMatchBody(..), Body, Type (..), Span, intercalateBuilder, LetBinding (..))
+import Ast (Expr (..), Stmt (..), IfMatchBody(..), Body, Type (..), intercalateBuilder, LetBinding (..), Value (..), Eval, RuntimeError (..), extractNumber)
 import Data.List (find, findIndex, intercalate)
 import Control.Monad (forM_, forM, when, void)
 import Control.Monad.Except (ExceptT, lift, runExceptT, liftIO, withExceptT)
@@ -15,87 +15,13 @@ import Data.Function (on)
 import Data.Bifunctor (second, Bifunctor (bimap))
 import Text.Read (readMaybe)
 import Data.Bits (Bits(..))
-import Error (Error (..))
+import Error (Error (..), Span)
 import TextShow ( TextShow(showt, showb), fromString )
 import Data.Char (ord, chr)
-
-data Value
-    = VBool { extractBool :: Bool }
-    | VInt { extractInt :: Int }
-    | VNat { extractNat :: Int }
-    | VString { extractString :: Text }
-    | VFunc [Text] Body
-    | VIntrin ([Value] -> Eval Value)
-    | VSole
-    | VList [Value]
-    | VMap [(Value, Value)]
-    | VChar { extractChar :: Char }
-extractNumber :: Value -> Int
-extractNumber (VNat n) = n
-extractNumber (VInt n) = n
-extractNumber e = error $ "Extracting number from " <> show e
-instance Eq Value where
-    VBool a == VBool b = a == b
-    VInt a == VInt b = a == b
-    VNat a == VNat b = a == b
-    VInt a == VNat b = a == b
-    VNat a == VInt b = a == b
-    VString a == VString b = a == b
-    VSole == VSole = True
-    VList a == VList b = a == b
-    VMap a == VMap b = a == b
-    VChar a == VChar b = a == b
-    a == b = False
-instance TextShow Value where
-    showb (VBool b) = showb b
-    showb (VInt n) = showb n
-    showb (VNat n) = showb n
-    showb (VString s) = showb s
-    showb VSole = "sole"
-    showb (VList els) = "[" <> intercalateBuilder ", " (map showb els) <> "]"
-    showb (VChar c) = "'" <> fromString [c] <> "'"
-    showb a = "thing"
-instance Show Value where show = unpack . showt
-
-data RuntimeError = Error Error | ReturnValue Value | BreakLoop
-type Eval = ExceptT RuntimeError (StateT (M.HashMap Text Value) IO)
 
 isTrue :: Value -> Bool
 isTrue (VBool True) = True
 isTrue _ = False
-
-prelude :: M.HashMap Text Value
-prelude = M.fromList [
-        ("length", VIntrin intrin_length)
-    ,   ("read", VIntrin intrin_read)
-    ,   ("print", VIntrin intrin_print)
-    ,   ("put_char", VIntrin intrin_put_char)
-    ,   ("cons", VIntrin intrin_cons)
-    ,   ("True", VBool True)
-    ,   ("False", VBool False)
-    ,   ("sole", VSole)
-    ,   ("to_char_list", VIntrin intrin_char_list)
-    ,   ("to_ascii", VIntrin intrin_to_ascii)
-    ,   ("from_ascii", VIntrin intrin_from_ascii)
-    ]
-    where
-        intrin_length [a] = case a of
-            VList vs -> return $ VNat $ length vs
-        intrin_read [s] = case s of
-            VString s -> case readMaybe (unpack s) of
-              Nothing -> error $ unpack s
-              Just any -> return $ VNat any
-        intrin_print [t] = liftIO $ print t >> return VSole
-        intrin_put_char [c] = liftIO $ case c of
-            VChar c -> putChar c >> return VSole
-        intrin_cons [a, l] = case l of
-            VList as -> return . VList $ a : as
-        intrin_char_list [l] = case l of
-            VString s -> return $ VList $ map VChar $ unpack s
-        intrin_to_ascii [c] = case c of VChar c -> return $ VNat $ ord c
-        intrin_from_ascii [n] = case n of
-            VNat n -> return $ VChar $ chr n
-            VInt n -> return $ VChar $ chr n
 
 evalExpr :: Expr -> Eval Value
 evalExpr expr = case expr of

@@ -1,0 +1,33 @@
+{
+  "name": "dabulang",
+  "version": "1.0.0",
+  "description": "A simple imperative programming language with a BASIC-inspired syntax",
+  "main": "vscode/out/main.js",
+  "scripts": {
+    "compile": "tsc -b",
+    "watch": "tsc -b -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stickyPiston/dabulang.git"
+  },
+	"engines": {
+		"vscode": "^1.63.0"
+	},
+  "activationEvents": [
+		"onLanguage:plaintext"
+	],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stickyPiston/dabulang/issues"
+  },
+  "homepage": "https://github.com/stickyPiston/dabulang#readme",
+  "devDependencies": {
+    "@types/node": "^16.11.7",
+    "@types/vscode": "^1.63.0",
+    "@vscode/test-electron": "^2.1.2",
+    "typescript": "^4.7.2"
+  }
+}
