@@ -10,6 +10,6 @@
 	"include": [ "src" ],
 	"exclude": [ "node_modules" ],
 	"references": [
-		{ "path": "./plugin" }
+		{ "path": "./vscode" }
 	]
 }

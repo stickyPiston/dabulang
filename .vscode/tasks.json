@@ -11,24 +11,17 @@
 			},
 			"problemMatcher": [
 				"$tsc"
-			]
+			],
+			"label": "npm"
 		},
 		{
-			"type": "npm",
-			"script": "watch",
-			"isBackground": true,
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"presentation": {
-				"panel": "dedicated",
-				"reveal": "never"
-			},
-			"problemMatcher": [
-				"$tsc-watch"
-			],
-			"label": "Watch"
+			"type": "shell",
+			"command": ["cabal", "build", "lsp"],
+			"label": "cabal"
+		},
+		{
+			"label": "build",
+			"dependsOn": ["cabal", "npm"]
 		}
 	]
 }

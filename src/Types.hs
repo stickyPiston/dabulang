@@ -185,7 +185,7 @@ inferStmt stmt = case stmt of
                         _ -> do
                             typed_value <- inferExpr val
                             if ty /= type_ typed_value
-                                then throwErrorAt val "Mismatched types between annotation and value"
+                                then throwErrorAt val $ "Mismatched types between annotation and value: expected " <> showt ty <> ", got " <> showt (type_ typed_value)
                                 else return typed_value
                     Nothing -> inferExpr val
 

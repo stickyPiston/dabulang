@@ -15,12 +15,12 @@ extra-source-files: TODO.org
                   , .vscode
 
 library dabulangc
-    other-modules:    Types
-                    , Parser
+    other-modules:    Eval
+    exposed-modules:  Parser
+                    , Types
                     , Ast
-                    , Error
-                    , Eval
                     , Std
+                    , Error
 
     build-depends:    base
                     , unordered-containers
@@ -46,5 +46,9 @@ executable lsp
                     , lsp
                     , text
                     , dabulangc
+                    , megaparsec
+                    , transformers
+                    , unordered-containers
+                    , lens
     hs-source-dirs:   lsp
     default-language: Haskell2010
