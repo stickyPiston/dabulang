@@ -17,9 +17,11 @@ import Language.LSP.Diagnostics
 import Language.LSP.VFS hiding (_line, _character)
 import System.IO hiding (liftIO)
 import Data.List.NonEmpty (toList)
+import Data.IORef
+import Completions (CompletionScope (..), gatherCompletions, findCompletions)
 
-handlers :: Handlers (LspM ())
-handlers = mconcat
+handlers :: IORef CompletionScope -> Handlers (LspM ())
+handlers completions = mconcat
   [ notificationHandler STextDocumentDidChange $ \msg -> do
         let NotificationMessage _ _ (DidChangeTextDocumentParams document _) = msg
             VersionedTextDocumentIdentifier uri version = document
@@ -27,10 +29,13 @@ handlers = mconcat
             virtualFile = getVirtualFile normalizedUri
             mcontent = maybe "" virtualFileText <$> virtualFile 
          in mcontent >>= \content -> sendDiagnostics content normalizedUri
-  , notificationHandler STextDocumentDidOpen $ \msg ->
+  , notificationHandler STextDocumentDidOpen $ \msg -> do
         let NotificationMessage _ _ (DidOpenTextDocumentParams document) = msg
             TextDocumentItem uri _ version content = document
-         in sendDiagnostics content (toNormalizedUri uri)
+            newCompletions = gatherCompletions content
+         in do
+          liftIO $ writeIORef completions newCompletions
+          sendDiagnostics content (toNormalizedUri uri)
   , notificationHandler STextDocumentDidSave $ \msg -> do
         let NotificationMessage _ _ (DidSaveTextDocumentParams document mcontent) = msg
             uri = _uri (document :: TextDocumentIdentifier)
@@ -38,6 +43,11 @@ handlers = mconcat
             content = maybe "" id mcontent
          in sendDiagnostics content normalizedUri
   , notificationHandler SInitialized $ \message -> return ()
+  , requestHandler STextDocumentCompletion $ \req responder ->
+    let RequestMessage _ _ _ (CompletionParams doc pos w p ctx) = req
+     in do
+      scope <- liftIO $ readIORef completions
+      responder $ Right $ InL $ findCompletions scope pos
   ]
   where
     createDiagnostic :: Show b => String -> ParseError T.Text b -> Diagnostic
@@ -67,21 +77,24 @@ spanToPosition (Span begin end) = Range (Position (extract (sourceLine begin) - 
   where extract = fromIntegral . unPos
 
 main :: IO Int
-main = runServer $ ServerDefinition
-  { onConfigurationChange = const $ const $ Right ()
-  , defaultConfig = ()
-  , doInitialize = \env _req -> pure $ Right env
-  , staticHandlers = handlers
-  , interpretHandler = \env -> Iso (runLspT env) liftIO
-  , options = defaultOptions {
-    textDocumentSync =
-        Just
-          ( TextDocumentSyncOptions
-              (Just True)
-              (Just TdSyncFull)
-              (Just False)
-              (Just False)
-              (Just $ InR $ SaveOptions $ Just True)
-          )
+main = do
+  completions <- newIORef CompletionScope {}
+  runServer $ ServerDefinition
+    { onConfigurationChange = const $ const $ Right ()
+    , defaultConfig = ()
+    , doInitialize = \env _req -> pure $ Right env
+    , staticHandlers = handlers completions
+    , interpretHandler = \env -> Iso (runLspT env) liftIO
+    , options = defaultOptions {
+      completionTriggerCharacters = Just $ ['a'..'z'] ++ ['A' .. 'Z'] ++ ['_'],
+      textDocumentSync =
+          Just
+            ( TextDocumentSyncOptions
+                (Just True)
+                (Just TdSyncIncremental)
+                (Just False)
+                (Just False)
+                (Just $ InR $ SaveOptions $ Just True)
+            )
+      }
     }
-  }

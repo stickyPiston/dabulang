@@ -137,27 +137,41 @@ ifP = do
     cond <- between (symbol "If") (symbol "Then") exprP
     end <- getSourcePos
     first_body <- bodyP
+    bodyEnd <- getSourcePos
     bodies <- many (try elseIfP)
-    else_ <- optional $ (,) <$> (getSourcePos >>= \begin -> return $ Span begin (begin { sourceColumn = mkPos $ 4 + unPos (sourceColumn begin) })) <*> elseP
+    else_ <- optional $ do
+        span <- getSourcePos >>= \begin -> return $ Span begin (begin { sourceColumn = mkPos $ 4 + unPos (sourceColumn begin) })
+        (bodySpan, body) <- elseP
+        return (span, bodySpan, body)
     symbol "End"
-    return $ If (IfMatchBody cond (Span begin end) first_body : bodies) (fst <$> else_) (snd <$> else_)
+    return $ case else_ of
+        Just (span, bodySpan, body) -> If (IfMatchBody cond (Span begin end) first_body (Span end bodyEnd) : bodies) (Just span) (Just body) (Just bodySpan)
+        Nothing -> If (IfMatchBody cond (Span begin end) first_body (Span end bodyEnd) : bodies) Nothing Nothing Nothing
     where
         elseIfP :: Parser IfMatchBody
         elseIfP = do
             begin <- getSourcePos
             cond <- symbol "Else" >> between (symbol "If") (symbol "Then") exprP
+            bodyStart <- getSourcePos
+            body <- bodyP
+            bodyEnd <- getSourcePos
+            return $ IfMatchBody cond (Span begin bodyStart) body (Span bodyStart bodyEnd)
+        elseP :: Parser (Span, Body)
+        elseP = do
+            begin <- getSourcePos
+            body <- symbol "Else" >> bodyP
             end <- getSourcePos
-            IfMatchBody cond (Span begin end) <$> bodyP
-        elseP :: Parser Body
-        elseP = symbol "Else" >> bodyP
+            return (Span begin end, body)
 returnP = Return <$> between (symbol "Return") semicolon exprP
 forP = do
     (Variable _ loc name) <- symbol "For" >> varP
     startValue <- optional assignmentP
     endValue <- symbol "To" >> exprP
     byValue <- optional byP
+    bodyStart <- getSourcePos
     body <- between (symbol "Then") (symbol "End") bodyP
-    return $ For name loc startValue endValue byValue body
+    bodyEnd <- getSourcePos
+    return $ For name loc startValue endValue byValue body (Span bodyStart bodyEnd)
     where
         assignmentP, byP :: Parser Expr
         assignmentP = symbol "=" >> exprP
@@ -186,6 +200,7 @@ typedefP = do
             end <- getSourcePos
             return (name, (type_, Span begin end))
 funcP = do
+    startLoc <- getSourcePos
     symbol "Func"
     nameBegin <- getSourcePos
     name <- identP
@@ -197,7 +212,14 @@ funcP = do
     ret_type <- typeP
     retEnd <- getSourcePos
     body <- map (replace_types_in_body type_params) <$> bodyP <* symbol "End"
-    return $ FuncDef name (Span nameBegin nameEnd) (map (second $ first $ replace_type_vars type_params) params) (replace_type_vars type_params ret_type) (Span retBegin retEnd) body
+    endLoc <- getSourcePos
+    return $ FuncDef
+        { name = name, nameLocation = Span nameBegin nameEnd
+        , params = map (second $ first $ replace_type_vars type_params) params
+        , retType = replace_type_vars type_params ret_type
+        , retTypeLocation = Span retBegin retEnd, bodyFu = body
+        , defSpan = Span startLoc endLoc
+        }
     where
         paramP :: Parser (Text, (Type, Span))
         paramP = do
@@ -244,9 +266,13 @@ letP = do
 matchP = do
     variable <- between (symbol "Match") (symbol "Then") exprP
     blocks <- some blockP
-    other <- optional $ between (symbol "Otherwise") (symbol "End") bodyP
+    other <- optional $ do
+        otherBegin <- symbol "Otherwise" >> getSourcePos
+        body <- bodyP
+        otherEnd <- symbol "End" >> getSourcePos
+        return (body, Span otherBegin otherEnd)
     symbol "End"
-    return $ Match variable blocks other
+    return $ Match variable blocks (fst <$> other) (snd <$> other)
     where
         blockP :: Parser IfMatchBody
         blockP = do
@@ -254,13 +280,16 @@ matchP = do
             cond <- between (symbol "When") (symbol "Then") exprP 
             condEnd <- getSourcePos
             body <- bodyP <* symbol "End"
-            return $ IfMatchBody cond (Span condBegin condEnd) body
+            bodyEnd <- getSourcePos
+            return $ IfMatchBody cond (Span condBegin condEnd) body (Span condEnd bodyEnd)
 whileP :: Bool -> Parser Stmt
 whileP until = do
     if until then symbol "Until" else symbol "While"
     cond <- exprP <* symbol "Then"
+    bodyStart <- getSourcePos
     body <- bodyP <* symbol "End"
-    return $ (if until then Loop True else Loop False) cond body
+    bodyEnd <- getSourcePos
+    return $ (if until then Loop True else Loop False) cond body (Span bodyStart bodyEnd)
 
 stmtP :: Parser Stmt
 stmtP = choice [ifP, forP, returnP, breakP, typedefP, letP, matchP, whileP True, whileP False, funcP, ExprStmt <$> (exprP <* semicolon)]

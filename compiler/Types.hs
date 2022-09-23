@@ -87,7 +87,7 @@ inferStmts :: [Stmt] -> Infer [Stmt]
 inferStmts = mapM inferStmt
 inferStmt :: Stmt -> Infer Stmt
 inferStmt stmt = case stmt of
-    If bodies _ else_prog -> do
+    If bodies _ else_prog _ -> do
         typed_bodies <- mapM (withNewScope . infer_body) bodies
         typed_else_prog <- withNewScope $ runMaybeT $ do
             prog <- hoistMaybe else_prog
@@ -95,12 +95,12 @@ inferStmt stmt = case stmt of
         return stmt { bodies = typed_bodies, elseProg = typed_else_prog }
         where
             infer_body :: IfMatchBody -> Infer IfMatchBody
-            infer_body (IfMatchBody cond loc body) = do
+            infer_body (IfMatchBody cond loc body span) = do
                 typed_cond <- inferExpr cond
                 typed_cond `hasType` [Base "Bool"]
                 typed_body <- inferStmts body
-                return $ IfMatchBody typed_cond loc typed_body
-    Loop is_until cond body -> do
+                return $ IfMatchBody typed_cond loc typed_body span
+    Loop is_until cond body _ -> do
         typed_cond <- inferExpr cond
         typed_cond `hasType` [Base "Bool"]
         typed_body <- withNewScope $ inferStmts body
@@ -122,7 +122,7 @@ inferStmt stmt = case stmt of
     AliasDef name _ aliasee -> do
         env <- get ; put $ env { delta = M.insert name (Alias name aliasee) (delta env) }
         return stmt
-    FuncDef name _ params ret_type _ body -> do
+    FuncDef name _ params ret_type _ body _ -> do
         env <- get
         let new_env = env { gamma = M.insert name (True, Func (zip (map (Just . fst) params) $ map (fst . snd) params) ret_type) (gamma env) }
             func_scope = new_env { gamma = M.union (M.fromList $ map (\(k, (v, s)) -> (k, (True, v))) params) (gamma new_env) }
@@ -135,7 +135,7 @@ inferStmt stmt = case stmt of
                 typed_expr `hasType` [ret_type] -- TODO: Replace error
                 return $ Return typed_expr
             infer_func_stmt stmt = inferStmt stmt
-    For variable var_loc start end by body -> do
+    For variable var_loc start end by body _ -> do
         typed_end <- inferExpr end
         end_type <- typed_end `hasType` numeric
 
@@ -151,7 +151,7 @@ inferStmt stmt = case stmt of
             _ -> pure ()
         typed_body <- withNewScope $ inferStmts body
         return stmt { startValue = typed_start, endValue = typed_end, byValue = typed_by, bodyFo = typed_body }
-    Match variable blocks other -> do
+    Match variable blocks other _ -> do
         typed_variable <- inferExpr variable
         typed_blocks <- mapM (withNewScope . infer_block (type_ typed_variable)) blocks
         typed_otherwise <- runMaybeT $ do
@@ -160,11 +160,11 @@ inferStmt stmt = case stmt of
         return stmt { value = typed_variable, bodies = typed_blocks, other = typed_otherwise }
         where
             infer_block :: Type -> IfMatchBody -> Infer IfMatchBody
-            infer_block variable_type (IfMatchBody value loc body) = do
+            infer_block variable_type (IfMatchBody value loc body span) = do
                 typed_value <- inferExpr value
                 typed_value `hasType` [variable_type]
                 typed_body <- inferStmts body
-                return $ IfMatchBody typed_value loc typed_body
+                return $ IfMatchBody typed_value loc typed_body span
     Let is_const bindings -> do
         typed_bindings <- traverse inferBinding bindings
         return stmt { bindings = typed_bindings }

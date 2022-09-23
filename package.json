@@ -16,6 +16,7 @@
   },
   "main": "vscode/out/main.js",
   "scripts": {
+    "postinstall": "cd vscode && npm i",
     "compile": "tsc -b",
     "watch": "tsc -b -w"
   },

@@ -15,33 +15,41 @@ extra-source-files: TODO.org
                   , .vscode
 
 library dabulangc
-    other-modules:    Eval
     exposed-modules:  Parser
                     , Types
                     , Ast
                     , Std
                     , Error
+                    , Eval
 
     build-depends:    base
                     , unordered-containers
                     , transformers
                     , mtl
                     , megaparsec
-                    , parser-combinators
                     , text
                     , text-show
-    hs-source-dirs:   src
+                    , transformers
+                    , parser-combinators
+    hs-source-dirs:   compiler
     default-language: Haskell2010
 
 executable dabulang
     main-is:          Main.hs
-    build-depends:    dabulangc
+    hs-source-dirs:   app
+    build-depends:    base
+                    , dabulangc
+                    , megaparsec
+                    , mtl
+                    , text
+                    , unordered-containers
+                    , transformers
+    default-language: Haskell2010
 
 executable lsp
     main-is:          Main.hs
+    other-modules:    Completions
 
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
     build-depends:    base ^>=4.15.1.0
                     , lsp
                     , text

@@ -11,7 +11,7 @@ Func interp_bf(source_string As String) As Trivial
     Let pc = 0, mc = 0, mem = list_fill_with(upper_limit, 0);
     
     While pc < length(source) Then
-        Match source_string(pc) Then
+        Match source(pc) Then
             When '+' Then
                 If mem(mc) == 255 Then mem(mc) = 0;
                 Else mem(mc) = mem(mc) + 1; End
@@ -58,3 +58,5 @@ interp_bf("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++
 "Prints Hello World!";
 
 print({ "hello" : 10, "world" : 20 });
+
+Const a As List[Nat] = [10, 20, 30, "Hello"];

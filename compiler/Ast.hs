@@ -34,8 +34,7 @@ instance TextShow Type where
     showb None = "None"
 instance Show Type where show = unpack . showt
 
-
-data IfMatchBody = IfMatchBody { cond :: Expr, condLocation :: Span, body :: Body }
+data IfMatchBody = IfMatchBody { cond :: Expr, condLocation :: Span, body :: Body, bodySpan :: Span }
     deriving Show
 data LetBinding = LetBinding { name :: Text, nameLocation :: Span, annotation :: Maybe Type
     , annotationLocation :: Maybe Span, value :: Expr }
@@ -44,8 +43,8 @@ instance TextShow LetBinding where
 
 type Body = [Stmt]
 data Stmt
-    = If { bodies :: [IfMatchBody], elseLocation :: Maybe Span, elseProg :: Maybe Body }
-    | Loop { isUntil :: Bool, condU :: Expr, bodyU :: Body }
+    = If { bodies :: [IfMatchBody], elseLocation :: Maybe Span, elseProg :: Maybe Body, elseProgSpan :: Maybe Span }
+    | Loop { isUntil :: Bool, condU :: Expr, bodyU :: Body, bodyUSpan :: Span }
     | Return { value :: Expr }
     | Break
     | GroupDef { name :: Text, nameLocation :: Span, fields :: M.HashMap Text (Type, Span)
@@ -53,26 +52,26 @@ data Stmt
     | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
     | AliasDef { name :: Text, nameLocation :: Span, aliasee :: Type }
     | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))]
-              , retType :: Type, retTypeLocation :: Span, bodyFu :: Body }
+              , retType :: Type, retTypeLocation :: Span, bodyFu :: Body, defSpan :: Span }
     | For { variable :: Text, variableLocation :: Span, startValue :: Maybe Expr
-          , endValue :: Expr, byValue :: Maybe Expr, bodyFo :: Body }
+          , endValue :: Expr, byValue :: Maybe Expr, bodyFo :: Body, bodyFSpan :: Span }
     | Match { value :: Expr, bodies :: [IfMatchBody]
-            , other :: Maybe Body }
+            , other :: Maybe Body, otherSpan :: Maybe Span }
     | Let { isConst :: Bool, bindings :: [LetBinding] }
     | ExprStmt { expr :: Expr }
 instance TextShow Stmt where
-    showb (If ((IfMatchBody cond _ body) : bodies) _ else_) = "If " <> showb cond <> " Then " <> showb body
-        <> mconcat (map (\(IfMatchBody cond _ body) -> "Else If " <> showb cond <> " Then " <> showb body) bodies)
+    showb (If ((IfMatchBody cond _ body _) : bodies) _ else_ _) = "If " <> showb cond <> " Then " <> showb body
+        <> mconcat (map (\(IfMatchBody cond _ body _) -> "Else If " <> showb cond <> " Then " <> showb body) bodies)
         <> maybe "" (("Else" <>) . showb) else_
         <> " End"
-    showb (Loop is_until cond body) = (if is_until then "Until " else "While ")
+    showb (Loop is_until cond body span) = (if is_until then "Until " else "While ")
         <> showb cond <> " Then " <> showb body <> " End"
     showb (Return expr) = "Return " <> showb expr <> ";"
     showb Break = "Break"
-    showb (FuncDef name _ params ret_type _ body) = "Func " <> fromText name <> "("
+    showb (FuncDef name _ params ret_type _ body _) = "Func " <> fromText name <> "("
         <> intercalateBuilder ", " (map (\(k, (v, _)) -> fromText k <> " As " <> showb v) params) <> ")"
         <> " As " <> showb ret_type <> " " <> showb body <> " End"
-    showb (For var _ start end by body) = "For " <> fromText var <> maybe "" ((" = " <>) . showb) start
+    showb (For var _ start end by body _) = "For " <> fromText var <> maybe "" ((" = " <>) . showb) start
         <> " To " <> showb end <> maybe "" ((" By " <>) . showb) by <> " Then " <> showb body <> " End"
     showb (Let is_const bindings) = (if is_const then "Const " else "Let ") <>
         intercalateBuilder ", " (map showb bindings) <> ";"

@@ -139,12 +139,12 @@ evalExpr expr = case expr of
 
 evalStmt :: Stmt -> Eval ()
 evalStmt stmt = case stmt of
-    If bodies _ else_ -> do
+    If bodies _ else_ _ -> do
         conds <- zip (map body bodies) <$> forM bodies (evalExpr . cond)
         case find (isTrue . snd) conds of
           Nothing -> forM_ else_ (mapM_ evalStmt)
           Just (body, _) -> mapM_ evalStmt body
-    Loop b cond sts -> evalBody b cond sts
+    Loop b cond sts _ -> evalBody b cond sts
         where
             evalBody :: Bool -> Expr -> Body -> Eval ()
             evalBody isUntil cond body = do
@@ -160,8 +160,8 @@ evalStmt stmt = case stmt of
     GroupDef txt sp hm x0 -> undefined
     EnumDef txt sp txts -> undefined
     AliasDef txt sp ty -> undefined
-    FuncDef name _ params _ _ body -> modify $ M.insert name (VFunc (map fst params) body)
-    For var _ start end by body -> do
+    FuncDef name _ params _ _ body _ -> modify $ M.insert name (VFunc (map fst params) body)
+    For var _ start end by body _ -> do
         start <- evalMaybe start
         maybe (pure ()) (modify . M.insert var) start
         by <- evalMaybe by
@@ -185,12 +185,12 @@ evalStmt stmt = case stmt of
             orElse :: Maybe a -> a -> a
             orElse (Just a) _ = a
             orElse Nothing a = a
-    Match cond bodies other -> do
+    Match cond bodies other _ -> do
         variable <- evalExpr cond
         evalBlocks bodies other variable
         where
             evalBlocks :: [IfMatchBody] -> Maybe Body -> Value -> Eval ()
-            evalBlocks ((IfMatchBody cond _ body) : bodies) other variable = do
+            evalBlocks ((IfMatchBody cond _ body _) : bodies) other variable = do
                 cond <- evalExpr cond
                 if cond == variable then mapM_ evalStmt body else evalBlocks bodies other variable
             evalBlocks [] Nothing _ = return ()
