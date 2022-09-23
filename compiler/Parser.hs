@@ -216,6 +216,7 @@ funcP = do
     return $ FuncDef
         { name = name, nameLocation = Span nameBegin nameEnd
         , params = map (second $ first $ replace_type_vars type_params) params
+        , typeF_ = None
         , retType = replace_type_vars type_params ret_type
         , retTypeLocation = Span retBegin retEnd, bodyFu = body
         , defSpan = Span startLoc endLoc

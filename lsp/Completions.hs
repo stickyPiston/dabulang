@@ -1,6 +1,9 @@
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Completions where
 
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack, pack)
 import Language.LSP.Types (Position (Position), CompletionItem (..), List (..))
 import Text.Megaparsec (parse, SourcePos (SourcePos), unPos, mkPos)
 import Parser (programP)
@@ -20,13 +23,25 @@ emptyScope span = CompletionScope { position = span, vars = [], scopes = [] }
 findCompletions :: CompletionScope -> Position -> List CompletionItem
 findCompletions scope pos =
     let sourcePos = posToSourcePos pos
-        availableVars = Completions.name <$> filter (\(CompletionVariable pos _ _) -> pos < sourcePos) (vars scope)
+        availableVars = filter (\(CompletionVariable pos _ _) -> pos < sourcePos) (vars scope)
         rec = mconcat $ mapMaybe (\scope@CompletionScope { position = (Span begin end) } ->
             if posToSourcePos pos < end then Just $ findCompletions scope pos else Nothing) $ scopes scope
-     in rec <> List (map (\label -> CompletionItem label Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing) availableVars)
+     in rec <> List (map createCompletionItem availableVars)
     where
         posToSourcePos :: Position -> SourcePos
         posToSourcePos (Position row col) = (SourcePos "" `on` mkPos . fromIntegral) row col
+        createCompletionItem :: CompletionVariable -> CompletionItem
+        createCompletionItem CompletionVariable { pos, Completions.name, Completions.type_ } =
+            CompletionItem
+            { _label = name, _kind = Nothing
+            , _tags = Nothing, _detail = Just $ "As " <> pack (show type_)
+            , _documentation = Nothing, _deprecated = Nothing
+            , _preselect = Nothing, _sortText = Nothing
+            , _filterText = Nothing, _insertText = Nothing
+            , _insertTextFormat = Nothing, _textEdit = Nothing
+            , _additionalTextEdits = Nothing, _commitCharacters = Nothing
+            , _command = Nothing, _xdata = Nothing, _insertTextMode = Nothing
+            }
 
 gatherCompletions :: Text -> CompletionScope
 gatherCompletions source =
@@ -55,9 +70,9 @@ gatherCompletions source =
         completionsFromLetBinding (LetBinding name (Span begin _) _ _ value) = CompletionVariable begin name $ Ast.type_ value 
         findDefintions :: CompletionScope -> Stmt -> CompletionScope
         findDefintions scope (Let _ bindings) = scope { vars = vars scope ++ map completionsFromLetBinding bindings }
-        findDefintions scope (FuncDef name loc _ _ _ body span) =
+        findDefintions scope (FuncDef name loc _ ty _ _ body span) =
             let filledScope = foldl findDefintions (emptyScope span) body
-             in scope { vars = CompletionVariable (startLocation loc) name None : vars scope, scopes = filledScope : scopes scope }
+             in scope { vars = CompletionVariable (startLocation loc) name ty : vars scope, scopes = filledScope : scopes scope }
         findDefintions scope (If bodies _ else_ loc) =
             let ifScopes = map (\b -> foldl findDefintions (emptyScope $ bodySpan b) $ body b) bodies
                 elseScope = case (else_, loc) of

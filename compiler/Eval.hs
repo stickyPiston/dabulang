@@ -160,7 +160,7 @@ evalStmt stmt = case stmt of
     GroupDef txt sp hm x0 -> undefined
     EnumDef txt sp txts -> undefined
     AliasDef txt sp ty -> undefined
-    FuncDef name _ params _ _ body _ -> modify $ M.insert name (VFunc (map fst params) body)
+    FuncDef name _ params _ _ _ body _ -> modify $ M.insert name (VFunc (map fst params) body)
     For var _ start end by body _ -> do
         start <- evalMaybe start
         maybe (pure ()) (modify . M.insert var) start

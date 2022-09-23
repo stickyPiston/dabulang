@@ -122,12 +122,13 @@ inferStmt stmt = case stmt of
     AliasDef name _ aliasee -> do
         env <- get ; put $ env { delta = M.insert name (Alias name aliasee) (delta env) }
         return stmt
-    FuncDef name _ params ret_type _ body _ -> do
+    FuncDef name _ params _ ret_type _ body _ -> do
         env <- get
-        let new_env = env { gamma = M.insert name (True, Func (zip (map (Just . fst) params) $ map (fst . snd) params) ret_type) (gamma env) }
+        let func_type = Func (zip (map (Just . fst) params) $ map (fst . snd) params) ret_type
+            new_env = env { gamma = M.insert name (True, func_type) (gamma env) }
             func_scope = new_env { gamma = M.union (M.fromList $ map (\(k, (v, s)) -> (k, (True, v))) params) (gamma new_env) }
         put func_scope ; typed_body <- mapM infer_func_stmt body ; put new_env
-        return stmt { bodyFu = typed_body }
+        return stmt { bodyFu = typed_body, typeF_ = func_type }
         where
             infer_func_stmt :: Stmt -> Infer Stmt
             infer_func_stmt (Return expr) = do

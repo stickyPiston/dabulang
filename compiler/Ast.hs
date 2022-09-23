@@ -51,7 +51,7 @@ data Stmt
                , extends :: [(Text, Span)] }
     | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
     | AliasDef { name :: Text, nameLocation :: Span, aliasee :: Type }
-    | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))]
+    | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))], typeF_ :: Type
               , retType :: Type, retTypeLocation :: Span, bodyFu :: Body, defSpan :: Span }
     | For { variable :: Text, variableLocation :: Span, startValue :: Maybe Expr
           , endValue :: Expr, byValue :: Maybe Expr, bodyFo :: Body, bodyFSpan :: Span }
@@ -68,7 +68,7 @@ instance TextShow Stmt where
         <> showb cond <> " Then " <> showb body <> " End"
     showb (Return expr) = "Return " <> showb expr <> ";"
     showb Break = "Break"
-    showb (FuncDef name _ params ret_type _ body _) = "Func " <> fromText name <> "("
+    showb (FuncDef name _ params _ ret_type _ body _) = "Func " <> fromText name <> "("
         <> intercalateBuilder ", " (map (\(k, (v, _)) -> fromText k <> " As " <> showb v) params) <> ")"
         <> " As " <> showb ret_type <> " " <> showb body <> " End"
     showb (For var _ start end by body _) = "For " <> fromText var <> maybe "" ((" = " <>) . showb) start
