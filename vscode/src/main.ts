@@ -9,9 +9,8 @@ let client : LanguageClient;
 
 export function activate(_ : ExtensionContext) {
 	const executable_path = process.platform === "win32"
-		// Verify that this is actually the path for windows builds
-		? sync(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp.exe").replace("\\", "/"))
-		: sync(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp"))
+		? sync([join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp.exe").replace(/\\/g, "/")])
+		: sync([join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp")])
 
 	const server_options : ServerOptions = {
 		command: executable_path[0],
