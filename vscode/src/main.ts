@@ -1,24 +1,18 @@
 import { ExtensionContext } from 'vscode';
-
 import {
 	LanguageClient, LanguageClientOptions, ServerOptions, TransportKind
 } from 'vscode-languageclient/node';
 import { join } from 'path';
-import { glob } from 'glob';
+import { sync } from 'fast-glob';
 
-let client: LanguageClient;
+let client : LanguageClient;
 
-const glob_promise = (path : string) : Promise<string[]> =>
-	new Promise((resolve, reject) => {
-		glob(path, (err, matches) => {
-			if (err) reject(err); else resolve(matches);
-		});
-	});
-
-export async function activate(_ : ExtensionContext) {
+export function activate(_ : ExtensionContext) {
 	const executable_path = process.platform === "win32"
-		? await glob_promise(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp.exe"))
-		: await glob_promise(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp"))
+		// Verify that this is actually the path for windows builds
+		? sync(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp.exe"))
+		: sync(join(__dirname, "../../dist-newstyle/build/**/build/lsp/lsp"))
+
 	const server_options : ServerOptions = {
 		command: executable_path[0],
 		options: {

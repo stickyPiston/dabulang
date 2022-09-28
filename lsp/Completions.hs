@@ -74,7 +74,7 @@ gatherCompletions source =
             let filledScope = foldl findDefintions (emptyScope span) body
              in scope { vars = CompletionVariable (startLocation loc) name ty : vars scope, scopes = filledScope : scopes scope }
         findDefintions scope (If bodies _ else_ loc) =
-            let ifScopes = map (\b -> foldl findDefintions (emptyScope $ bodySpan b) $ body b) bodies
+            let ifScopes = [foldl findDefintions (emptyScope $ bodySpan b) (body b) | b <- bodies]
                 elseScope = case (else_, loc) of
                     (Just else_, Just loc) -> [foldl findDefintions (emptyScope loc) else_]
                     _ -> []
@@ -85,7 +85,7 @@ gatherCompletions source =
             let newScope = (emptyScope span) { vars = [CompletionVariable varLoc var None] }
              in scope { scopes = foldl findDefintions newScope body : scopes scope }
         findDefintions scope (Match _ bodies other span) =
-            let bodyScopes = map (\(IfMatchBody _ _ body loc) -> foldl findDefintions (emptyScope loc) body) bodies
+            let bodyScopes = [foldl findDefintions (emptyScope loc) body | IfMatchBody _ _ body loc <- bodies]
                 otherScope = case (other, span) of
                     (Just body, Just span) -> [foldl findDefintions (emptyScope span) body]
                     _ -> []

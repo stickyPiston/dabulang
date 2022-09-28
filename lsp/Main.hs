@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+-- newIORef CompletionScope {} is empty because it should be filled out once a file is loaded
+{-# OPTIONS_GHC -Wno-missing-fields #-}
 
 import Language.LSP.Server
 import Language.LSP.Types
@@ -77,7 +79,7 @@ spanToPosition (Span begin end) = Range (Position (extract (sourceLine begin) - 
   where extract = fromIntegral . unPos
 
 main :: IO Int
-main = do
+main = do 
   completions <- newIORef CompletionScope {}
   runServer $ ServerDefinition
     { onConfigurationChange = const $ const $ Right ()
