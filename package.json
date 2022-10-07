@@ -27,9 +27,23 @@
   "engines": {
     "vscode": "^1.63.0"
   },
-  "activationEvents": [
-    "onLanguage:plaintext"
-  ],
+  "contributes": {
+		"languages": [
+			{
+				"id": "dabulang",
+				"extensions": [".dabu"],
+        "configuration": "./vscode/language-configuration.json"
+			}
+		],
+    "grammars": [
+      {
+          "language": "dabulang",
+          "scopeName": "source.dabu",
+          "path": "./vscode/syntaxes/dabulang.tmLanguage.json"
+      }
+    ]
+	},
+  "activationEvents": ["onLanguage:dabulang"],
   "keywords": [],
   "author": "",
   "license": "ISC",

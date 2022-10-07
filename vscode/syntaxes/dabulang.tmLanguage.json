@@ -1,0 +1,73 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "dabulang",
+	"fileTypes": ["dabu"],
+	"patterns": [
+		{"include": "#keywords"},
+		{"include": "#comments"},
+		{"include": "#strings"},
+		{"include": "#variables"},
+		{"include": "#constants"}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [
+				{
+                    "name": "keyword.operator",
+                    "match": "-|==|!=|<|>|<=|>=|\\|\\||&&|\\+|-|\\*|\\||\\^|&|/|or|and|=|:|;|,"
+				},
+				{
+                    "name": "keyword.control",
+                    "match": "Let|Const|Func|End|While|For|By|To|As|Until|If|Else|Then|Match|When|Otherwise|Return"
+				}
+			]
+        },
+		"strings": {
+			"patterns": [
+				{
+                    "name": "string.quoted.double",
+                    "begin": "\"",
+                    "end": "\""
+				},
+                {
+                    "name": "string.quoted.single",
+                    "begin": "'",
+                    "end": "'"
+                }
+			]
+		},
+		"variables": {
+			"patterns": [
+                {
+                    "name": "entity.name.functioncall",
+                    "begin": "([a-zA-Z_][a-zA-Z0-9_]*)(\\[(.*?)\\])?\\(",
+                    "beginCaptures": {
+                        "1": { "name": "entity.name.function"},
+						"3": { "name": "entity.name.type" }
+                    },
+					"patterns": [
+						{"include": "#keywords"},
+						{"include": "#strings"},
+						{"include": "#variables"},
+						{"include": "#constants"}
+					],
+					"end": "\\)"
+                },
+				{
+                    "name": "variable.other",
+                    "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+				}
+			]
+		},
+		"constants": {
+			"patterns": [
+				{
+                    "name": "constant.numeric",
+                    "match": "[0-9]+"
+				}
+			]
+		}
+
+	},
+	"scopeName": "source.dabu"
+}
