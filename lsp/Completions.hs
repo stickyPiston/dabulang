@@ -4,8 +4,8 @@
 module Completions where
 
 import Data.Text (Text, unpack, pack)
-import Language.LSP.Types (Position (Position), CompletionItem (..), List (..))
-import Text.Megaparsec (parse, SourcePos (SourcePos), unPos, mkPos)
+import Language.LSP.Types (Position (Position), CompletionItem (..), List (..), CompletionItemKind (..))
+import Text.Megaparsec (parse, SourcePos (..), unPos, mkPos)
 import Parser (programP)
 import Ast hiding (List)
 import Error (Span(..))
@@ -23,17 +23,25 @@ emptyScope span = CompletionScope { position = span, vars = [], scopes = [] }
 findCompletions :: CompletionScope -> Position -> List CompletionItem
 findCompletions scope pos =
     let sourcePos = posToSourcePos pos
-        availableVars = filter (\(CompletionVariable pos _ _) -> pos < sourcePos) (vars scope)
+        sourcePos' = sourcePos { sourceLine = mkPos $ unPos (sourceLine sourcePos) + 1 }
+        availableVars = filter (\(CompletionVariable pos _ _) -> pos < sourcePos') (vars scope)
         rec = mconcat $ mapMaybe (\scope@CompletionScope { position = (Span begin end) } ->
-            if posToSourcePos pos < end then Just $ findCompletions scope pos else Nothing) $ scopes scope
+             if sourcePos' < end then Just $ findCompletions scope pos else Nothing) $ scopes scope
      in rec <> List (map createCompletionItem availableVars)
     where
         posToSourcePos :: Position -> SourcePos
         posToSourcePos (Position row col) = (SourcePos "" `on` mkPos . fromIntegral) row col
+        kindFromType :: Type -> Maybe CompletionItemKind
+        kindFromType (Func _ _) = Just CiFunction
+        kindFromType (Base _) = Just CiVariable
+        kindFromType (Var _ _) = Just CiVariable
+        kindFromType (Appl (Func _ _) _) = Just CiFunction
+        kindFromType (Appl _ _) = Just CiVariable
+        kindFromType _ = Nothing
         createCompletionItem :: CompletionVariable -> CompletionItem
         createCompletionItem CompletionVariable { pos, Completions.name, Completions.type_ } =
             CompletionItem
-            { _label = name, _kind = Nothing
+            { _label = name, _kind = kindFromType type_
             , _tags = Nothing, _detail = Just $ "As " <> pack (show type_)
             , _documentation = Nothing, _deprecated = Nothing
             , _preselect = Nothing, _sortText = Nothing
@@ -46,12 +54,12 @@ findCompletions scope pos =
 gatherCompletions :: Text -> CompletionScope
 gatherCompletions source =
     let createSourcePos = SourcePos "" `on` mkPos
-        zeroPosition = createSourcePos 0 0
+        zeroPosition = createSourcePos 1 1
      in case parse programP "" source of
         Right ast -> case evalStateT (mapM inferStmt ast) env of
             Right typed_ast ->
                 let span = Span zeroPosition (findEndLocation $ unpack source)
-                in foldl findDefintions (emptyScope span) typed_ast
+                 in foldl findDefintions (emptyScope span) typed_ast
             Left _ -> emptyScope (Span zeroPosition zeroPosition)
         Left err -> emptyScope (Span zeroPosition zeroPosition)
     where
@@ -67,7 +75,7 @@ gatherCompletions source =
                 col = countWhile (/= '\n') $ reverse s
              in (SourcePos "" `on` mkPos) row col
         completionsFromLetBinding :: LetBinding -> CompletionVariable
-        completionsFromLetBinding (LetBinding name (Span begin _) _ _ value) = CompletionVariable begin name $ Ast.type_ value 
+        completionsFromLetBinding (LetBinding name (Span begin _) _ _ value) = CompletionVariable begin name $ Ast.type_ value
         findDefintions :: CompletionScope -> Stmt -> CompletionScope
         findDefintions scope (Let _ bindings) = scope { vars = vars scope ++ map completionsFromLetBinding bindings }
         findDefintions scope (FuncDef name loc _ ty _ _ body span) =
