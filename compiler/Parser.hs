@@ -78,6 +78,7 @@ operatorTable :: [[Operator Parser Expr]]
 operatorTable =
   [ [postfixP]
   , [unop "-", unop "~", unop "not"]
+  , [binop "."]
   , [binop "**"]
   , [binop "*", binop "/", binop "%"]
   , [binop "+", binop "-"]
@@ -186,11 +187,20 @@ typedefP = do
     where
         typeParamsP :: Parser [Text]
         typeParamsP = symbol "[" *> identP `sepBy1` symbol "," <* symbol "]"
+        extendsP :: Parser (Text, Span)
+        extendsP = do
+            begin <- getSourcePos
+            name <- identP
+            end <- getSourcePos
+            return (name, Span begin end)
         aliasP, groupP, enumP :: Text -> Span -> Parser Stmt
         aliasP name loc = AliasDef name loc <$> typeP <* symbol ";"
-        groupP name loc = GroupDef name loc
-            <$> (symbol "Group" *> (H.fromList <$> (groupFieldP `sepBy` symbol ",")) <* symbol ";")
-            <*> return []
+        groupP name loc = do
+            symbol "Group"
+            fields <- groupFieldP `sepBy` symbol ","
+            extends <- fromMaybe [] <$> optional (symbol "Extends" *> extendsP `sepBy1` symbol ",")
+            symbol ";"
+            return $ GroupDef name loc fields extends
         enumP name loc = EnumDef name loc <$> (symbol "Enum" *> identP `sepBy` symbol "," <* symbol ";")
         groupFieldP :: Parser (Text, (Type, Span))
         groupFieldP = do

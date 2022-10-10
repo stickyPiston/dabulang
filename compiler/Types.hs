@@ -8,7 +8,7 @@ import Data.List (intercalate, find, transpose, sort, nub, zip4)
 import Data.Either (rights, lefts, isLeft)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
 import Control.Monad.Trans (lift)
-import Control.Monad.State (modify, StateT, MonadState (get, put), when, zipWithM)
+import Control.Monad.State (modify, StateT, MonadState (get, put), when, zipWithM, gets)
 import Ast (Expr(..), Stmt(..), Body, Type(..), IfMatchBody (IfMatchBody), LetBinding (..))
 import Data.Text (Text, pack)
 import TextShow (TextShow(showt))
@@ -107,10 +107,15 @@ inferStmt stmt = case stmt of
         return stmt {condU = typed_cond, bodyU = typed_body }
     Return expr -> Return <$> inferExpr expr
     Break -> return Break
-    GroupDef name _ fields extends -> do
-        env <- get
-        traverse_ (\(gname, loc) -> maybeToInfer loc "Unknown type" $ M.lookup name (delta env)) extends
-        put $ env { delta = M.insert name (Group name (fst <$> fields) (fst <$> extends)) (delta env) }
+    GroupDef name _ ownFields extends -> do
+        env@(Env gamma delta) <- get
+        -- TODO: Check for each type whether it is a group
+        traverse_ (\(gname, loc) -> maybeToInfer loc "Unknown type" $ delta M.!? gname) extends
+        additionalFields <- mconcat <$> traverse getGroupFieldsFromEnv [name | (name, _) <- extends]
+        let fields = map (second fst) ownFields ++ additionalFields
+        let groupType = Group name fields (fst <$> extends)
+        put $ env { gamma = M.insert name (True, Func (map (first Just) fields) groupType) gamma
+                  , delta = M.insert name groupType delta }
         return stmt
         where
             maybeToInfer :: Span -> Text -> Maybe a -> Infer a
@@ -214,11 +219,15 @@ inferExpr expr = case expr of
     Binary _ lhs rhs "." _ _ -> do
         typed_lhs <- inferExpr lhs
         case (type_ typed_lhs, rhs) of
-            (Group gname fields _, Variable _ _ name) -> case M.lookup name fields of
-                Just field -> let typed_ident = rhs { type_ = Base "Ident" }
-                               in return $ expr { rhs = typed_ident, type_ = field }
-                Nothing -> throwErrorAt rhs $ "Unknown field " <> name <> " in group " <> gname
+            (Group gname fields extends, Variable _ _ name) -> do
+                extendsFields <- traverse getGroupFieldsFromEnv extends
+                let allFields = mconcat $ fields : extendsFields
+                 in case lookup name allFields of
+                    Just field -> let typed_ident = rhs { type_ = Base "Ident" }
+                                in return $ expr { rhs = typed_ident, type_ = field }
+                    Nothing -> throwErrorAt rhs $ "Unknown field " <> name <> " in group " <> gname
             _ -> throwErrorAt lhs "The dot operator only operates on group types and identifiers"
+        where
     Binary _ lhs rhs "=" _ _ -> do
         env <- get ; typed_rhs <- inferExpr rhs
         -- Constrains the left-hand side of the assignment operator to variable names,
@@ -258,9 +267,11 @@ inferExpr expr = case expr of
             b@(Binary _ lhs var@(Variable _ _ name) "." _ _) -> do
                 typed_lhs <- inferExpr lhs
                 case type_ typed_lhs of
-                    Group gname fields _ -> case M.lookup name fields of
-                        Just ty -> return expr { lhs = b { lhs = typed_lhs }, rhs = typed_rhs, type_ = ty }
-                        Nothing -> throwErrorAt var $ "Unknown field " <> name <> " in group " <> gname
+                    Group gname _ _ -> do
+                        fields <- getGroupFieldsFromEnv gname
+                        case lookup name fields of
+                            Just ty -> return expr { lhs = b { lhs = typed_lhs }, rhs = typed_rhs, type_ = ty }
+                            Nothing -> throwErrorAt var $ "Unknown field " <> name <> " in group " <> gname
                     _ -> throwErrorAt lhs "Expected a group"
             _ -> throwErrorAt lhs "Cannot assign"
         where
@@ -374,8 +385,14 @@ inferExpr expr = case expr of
             ftv (Appl base args) = ftv base ++ (args >>= ftv)
             ftv (Func args ret) = (args >>= ftv . snd) ++ ftv ret
             ftv (Alias _ t) = ftv t
-            ftv (Group _ fields supers) = M.elems fields >>= ftv
+            ftv (Group _ fields supers) = map snd fields >>= ftv
             ftv _ = []
     where
         throwErrorHere :: Text -> Infer a
         throwErrorHere = lift . throwError (location expr)
+
+getGroupFieldsFromEnv :: Text -> Infer [(Text, Type)]
+getGroupFieldsFromEnv name = do
+    env <- gets delta
+    let group = env M.! name
+     in return $ fieldTypes group

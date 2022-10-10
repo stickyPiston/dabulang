@@ -3,10 +3,10 @@
 
 module Eval where
 
-import Control.Monad.State (StateT, MonadState (..), modify)
+import Control.Monad.State (StateT, MonadState (..), modify, gets)
 import qualified Data.HashMap.Strict as M
 import Data.Text (Text, unpack, pack)
-import Ast (Expr (..), Stmt (..), IfMatchBody(..), Body, Type (..), intercalateBuilder, LetBinding (..), Value (..), Eval, RuntimeError (..), extractNumber)
+import Ast (Expr (..), Stmt (..), IfMatchBody(..), Body, Type (..), intercalateBuilder, LetBinding (..), Value (..), Eval, RuntimeError (..), extractNumber, variables, EvalState (..))
 import Data.List (find, findIndex, intercalate)
 import Control.Monad (forM_, forM, when, void)
 import Control.Monad.Except (ExceptT, lift, runExceptT, liftIO, withExceptT)
@@ -16,8 +16,7 @@ import Data.Bifunctor (second, Bifunctor (bimap))
 import Text.Read (readMaybe)
 import Data.Bits (Bits(..))
 import Error (Error (..), Span)
-import TextShow ( TextShow(showt, showb), fromString )
-import Data.Char (ord, chr)
+import TextShow (TextShow(showt, showb), fromString)
 
 isTrue :: Value -> Bool
 isTrue (VBool True) = True
@@ -28,13 +27,16 @@ evalExpr expr = case expr of
     Number _ _ n -> return $ VNat n
     String _ _ txt -> return $ VString txt
     Variable _ loc name -> do
-        env <- get ; case env M.!? name of
+        env <- gets variables ; case env M.!? name of
             Nothing -> throwE $ Error $ LocatedRuntimeError ("Undefined variable " <> name) loc
             Just va -> return va
+    Binary _ lhs (Variable _ _ field) "." _ _ -> do
+        VGroup name fields <- evalExpr lhs
+        return $ fields M.! field
     Binary _ lhs rhs "=" _ _ -> evalExpr rhs >>= assignAt lhs
         where
             assignAt :: Expr -> Value -> Eval Value
-            assignAt (Variable _ _ name) val = modify (M.insert name val) >> return val
+            assignAt (Variable _ _ name) val = modify (\state -> state { variables = M.insert name val (variables state) }) >> return val
             assignAt (Call _ callee [arg] _ loc) val = do
                 lhs <- evalExpr callee
                 arg <- evalExpr arg
@@ -52,7 +54,9 @@ evalExpr expr = case expr of
                     --         Nothing -> error "" -- TODO: Runtime error
                     --     _ -> error "" -- should be unreachable
                     _ -> error "" -- should be unreachable
-            assignAt (Binary _ lhs rhs "." _ _) val = undefined -- TODO:
+            assignAt (Binary _ lhs (Variable _ _ name) "." _ _) val = do
+                group@(VGroup _ fields) <- evalExpr lhs
+                assignAt lhs group { groupValues = M.insert name val fields }
             assignAt _ _ = error ""
             replaceAtIndex :: Span -> [Value] -> Value -> Int -> Eval [Value]
             replaceAtIndex _ [] val 0 = return [val]
@@ -102,10 +106,10 @@ evalExpr expr = case expr of
         args <- mapM evalExpr uargs
         case fn of
             VFunc names body -> do
-                oldScope <- get
-                lift $ put $ oldScope <> M.fromList (zip names args)
+                state@(EvalState oldScope _) <- get
+                lift $ put state { variables = oldScope <> M.fromList (zip names args) }
                 returned <- catchE (Left <$> mapM_ evalStmt body) (return . Right)
-                lift $ put oldScope
+                lift $ put state { variables = oldScope }
                 case returned of
                     Left va -> return VSole
                     Right value -> case value of
@@ -114,6 +118,7 @@ evalExpr expr = case expr of
                         BreakLoop -> throwE $ Error $ UnlocatedRuntimeError "Break out of function"
             VIntrin intrin -> intrin args
             VList els -> arrayIndex els args
+            VConstructor f -> return $ f args
             _ -> error $ show callee
         where
             atMay :: [a] -> Int -> Maybe a
@@ -157,13 +162,24 @@ evalStmt stmt = case stmt of
                         Right () -> evalBody b cond body
     Return ex -> evalExpr ex >>= throwE . ReturnValue
     Break -> throwE BreakLoop
-    GroupDef txt sp hm x0 -> undefined
+    GroupDef name _ fields_ extends -> do
+        delta <- gets types
+        additionalParamNames <- getAllConstructorFields (fst <$> extends)
+        let extensionNames = map fst extends
+            fieldNames = fst <$> fields_
+            construct = VConstructor $ \args -> VGroup name $ M.fromList $ zip (fieldNames ++ additionalParamNames) args 
+         in modifyVariables $ M.insert name construct
+         where
+            getAllConstructorFields :: [Text] -> Eval [Text]
+            getAllConstructorFields names = do
+                delta <- gets types
+                return $ concat [map fst fields | extension <- names, Group name fields extends <- [delta M.! extension]]
     EnumDef txt sp txts -> undefined
     AliasDef txt sp ty -> undefined
-    FuncDef name _ params _ _ _ body _ -> modify $ M.insert name (VFunc (map fst params) body)
+    FuncDef name _ params _ _ _ body _ -> modifyVariables $ M.insert name (VFunc (map fst params) body)
     For var _ start end by body _ -> do
         start <- evalMaybe start
-        maybe (pure ()) (modify . M.insert var) start
+        maybe (pure ()) (modifyVariables . M.insert var) start
         by <- evalMaybe by
         end <- evalExpr end
         evalBody var end (by `orElse` VNat 1) body
@@ -172,7 +188,7 @@ evalStmt stmt = case stmt of
             evalMaybe = traverse evalExpr
             evalBody :: Text -> Value -> Value -> Body -> Eval ()
             evalBody var end by body = do
-                env <- get
+                env <- gets variables
                 when (((<) `on` extractNumber) (env M.! var) end) $ do
                     a <- catchE (Right <$> mapM_ evalStmt body) (return . Left)
                     case a of
@@ -180,7 +196,7 @@ evalStmt stmt = case stmt of
                         Left e -> throwE e
                         Right () -> do
                             let incrementWith = ((+) `on` extractNumber) (env M.! var)
-                             in modify $ M.insert var (VNat $ incrementWith by)
+                             in modifyVariables $ M.insert var (VNat $ incrementWith by)
                             evalBody var end by body
             orElse :: Maybe a -> a -> a
             orElse (Just a) _ = a
@@ -198,12 +214,15 @@ evalStmt stmt = case stmt of
     Let b bindings ->
         forM_ bindings $ \(LetBinding name _ _ _ expr) -> do
             value <- evalExpr expr
-            modify $ M.insert name value
+            modifyVariables $ M.insert name value
     ExprStmt ex -> void $ evalExpr ex
 
-evalProgram :: Body -> ExceptT Error (StateT (M.HashMap Text Value) IO) ()
+evalProgram :: Body -> ExceptT Error (StateT EvalState IO) ()
 evalProgram prog = withExceptT transformError $ mapM_ evalStmt prog 
     where transformError :: RuntimeError -> Error
           transformError (Error er) = er
           transformError (ReturnValue va) = ICE "Unhandled return"
           transformError BreakLoop = ICE "Unhandled break"
+
+modifyVariables :: (M.HashMap Text Value -> M.HashMap Text Value) -> Eval ()
+modifyVariables f = modify $ \state -> state { variables = f $ variables state }

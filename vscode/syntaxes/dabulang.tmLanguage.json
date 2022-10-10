@@ -18,7 +18,7 @@
 				},
 				{
                     "name": "keyword.control",
-                    "match": "Let|Const|Func|End|While|For|By|To|As|Until|If|Else|Then|Match|When|Otherwise|Return"
+                    "match": "Let|Const|Func|End|While|For|By|To|As|Until|If|Else|Then|Match|When|Otherwise|Return|Type|Group|Enum|Extends"
 				}
 			]
         },

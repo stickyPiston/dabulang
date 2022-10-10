@@ -12,13 +12,14 @@ import Text.Megaparsec (SourcePos)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.State (StateT)
 import Error (Error, Span)
+import qualified Data.HashMap.Internal.Strict as H
 
 data Type
     = Base { nameT :: Text }
     | Func { paramTypes :: [(Maybe Text, Type)], retType :: Type }
     | Appl { base :: Type, argTypes :: [Type] }
     | Var { nameT :: Text, index :: Int }
-    | Group { nameT :: Text, fieldTypes :: M.HashMap Text Type, extends :: [Text] }
+    | Group { nameT :: Text, fieldTypes :: [(Text, Type)], extends :: [Text] }
     | Enum { nameT :: Text, names :: [Text] }
     | Alias { nameT :: Text, aliasee :: Type }
     | None
@@ -28,7 +29,7 @@ instance TextShow Type where
     showb (Func params ret) = "(" <> intercalateBuilder ", " (map (showb . snd) params) <> ") -> " <> showb ret
     showb (Appl base args) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
     showb (Var name _) = fromText name
-    showb (Group _ fields supers) = "Group " <> (intercalateBuilder ", " . M.elems $ M.mapWithKey (\k v -> showb k <> " As " <> showb v) fields)
+    showb (Group _ fields supers) = "Group " <> intercalateBuilder ", " [showb k <> " As " <> showb v | (k, v) <- fields]
     showb (Enum _ fields) = "Enum " <> showb (intercalate "," fields)
     showb (Alias name aliasee) = showb name <> " => " <> showb aliasee
     showb None = "None"
@@ -47,8 +48,8 @@ data Stmt
     | Loop { isUntil :: Bool, condU :: Expr, bodyU :: Body, bodyUSpan :: Span }
     | Return { value :: Expr }
     | Break
-    | GroupDef { name :: Text, nameLocation :: Span, fields :: M.HashMap Text (Type, Span)
-               , extends :: [(Text, Span)] }
+    | GroupDef { name :: Text, nameLocation :: Span, fields :: [(Text, (Type, Span))]
+               , extendsNames :: [(Text, Span)] }
     | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
     | AliasDef { name :: Text, nameLocation :: Span, aliasee :: Type }
     | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))], typeF_ :: Type
@@ -87,7 +88,7 @@ data Expr
     | Call { type_ :: Type, callee :: Expr, args :: [Expr], leftParenLocation :: Span, location :: Span }
     | List { type_ :: Type, location :: Span, els :: [Expr] }
     | Dict { type_ :: Type, kvpairs :: [(Expr, Expr)], location :: Span }
-    | Specialisation { type_ :: Type, base :: Expr, types :: [Type], location :: Span }
+    | Specialisation { type_ :: Type, base :: Expr, typeparams :: [Type], location :: Span }
     | Char { type_ :: Type, location :: Span, cValue :: Char }
 
 intercalateBuilder :: Builder -> [Builder] -> Builder
@@ -117,6 +118,8 @@ data Value
     | VList [Value]
     | VMap [(Value, Value)]
     | VChar { extractChar :: Char }
+    | VConstructor ([Value] -> Value)
+    | VGroup { groupName :: Text, groupValues :: M.HashMap Text Value }
 extractNumber :: Value -> Int
 extractNumber (VNat n) = n
 extractNumber (VInt n) = n
@@ -142,8 +145,12 @@ instance TextShow Value where
     showb (VList els) = "[" <> intercalateBuilder ", " (map showb els) <> "]"
     showb (VChar c) = "'" <> fromString [c] <> "'"
     showb (VMap els) = "{" <> intercalateBuilder ", " (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
+    showb (VGroup name values) = fromText name <> "("
+        <> intercalateBuilder ", " (H.elems $ H.mapWithKey (\key value -> fromText key <> " = " <> showb value) values)
+        <> ")"
     showb a = "thing"
 instance Show Value where show = unpack . showt
 
 data RuntimeError = Error Error | ReturnValue Value | BreakLoop
-type Eval = ExceptT RuntimeError (StateT (M.HashMap Text Value) IO)
+data EvalState = EvalState { variables :: M.HashMap Text Value, types :: M.HashMap Text Type }
+type Eval = ExceptT RuntimeError (StateT EvalState IO)
