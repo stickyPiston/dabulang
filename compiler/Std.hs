@@ -26,7 +26,7 @@ env = Env { gamma = M.fromList [
         ("to_char_list", (True, Func [(Nothing, Base "String")] (Appl (Base "List") [Base "Char"]))),
         ("to_ascii", (True, Func [(Nothing, Base "Char")] (Base "Nat"))),
         ("from_ascii", (True, Func [(Nothing, Base "Nat")] (Base "Char")))
-    ], delta = M.empty }
+    ], delta = M.empty, currentFunction = "" }
 
 prelude :: M.HashMap Text Value
 prelude = M.fromList [

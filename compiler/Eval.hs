@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE TupleSections #-}
 
 module Eval where
 
@@ -138,6 +139,10 @@ evalExpr expr = case expr of
     Dict _ els _ -> VMap <$> (zip <$> traverse (evalExpr . fst) els <*> traverse (evalExpr . snd) els)
     Char _ _ c -> return $ VChar c
     Specialisation _ ex _ _ -> evalExpr ex
+    GroupConstructor _ name _ inits _ -> do
+        fields <- traverse (\(_, name, expr) -> (name,) <$> evalExpr expr) inits
+        return $ VGroup name (M.fromList fields)
+    AliasConstructor _ name _ value _ -> undefined
     where
         throwICE :: Text -> Eval a
         throwICE = throwE . Error . ICE
@@ -162,20 +167,15 @@ evalStmt stmt = case stmt of
                         Right () -> evalBody b cond body
     Return ex -> evalExpr ex >>= throwE . ReturnValue
     Break -> throwE BreakLoop
-    GroupDef name _ fields_ extends -> do
+    GroupDef name _ fields_ extends constructors -> do
         delta <- gets types
-        additionalParamNames <- getAllConstructorFields (fst <$> extends)
         let extensionNames = map fst extends
             fieldNames = fst <$> fields_
+            additionalParamNames = concat [map fst fields | (extension, _) <- extends, Group name fields extends _ <- [delta M.! extension]]
             construct = VConstructor $ \args -> VGroup name $ M.fromList $ zip (fieldNames ++ additionalParamNames) args 
          in modifyVariables $ M.insert name construct
-         where
-            getAllConstructorFields :: [Text] -> Eval [Text]
-            getAllConstructorFields names = do
-                delta <- gets types
-                return $ concat [map fst fields | extension <- names, Group name fields extends <- [delta M.! extension]]
     EnumDef txt sp txts -> undefined
-    AliasDef txt sp ty -> undefined
+    AliasDef txt sp new ty -> undefined
     FuncDef name _ params _ _ _ body _ -> modifyVariables $ M.insert name (VFunc (map fst params) body)
     For var _ start end by body _ -> do
         start <- evalMaybe start

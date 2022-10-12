@@ -19,7 +19,7 @@ data Type
     | Func { paramTypes :: [(Maybe Text, Type)], retType :: Type }
     | Appl { base :: Type, argTypes :: [Type] }
     | Var { nameT :: Text, index :: Int }
-    | Group { nameT :: Text, fieldTypes :: [(Text, Type)], extends :: [Text] }
+    | Group { nameT :: Text, fieldTypes :: [(Text, Type)], extends :: [Text], constructors :: [Text] }
     | Enum { nameT :: Text, names :: [Text] }
     | Alias { nameT :: Text, aliasee :: Type }
     | None
@@ -29,7 +29,9 @@ instance TextShow Type where
     showb (Func params ret) = "(" <> intercalateBuilder ", " (map (showb . snd) params) <> ") -> " <> showb ret
     showb (Appl base args) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
     showb (Var name _) = fromText name
-    showb (Group _ fields supers) = "Group " <> intercalateBuilder ", " [showb k <> " As " <> showb v | (k, v) <- fields]
+    showb (Group name fields supers constructors) = fromText name
+        -- "Group " <> intercalateBuilder ", " [showb k <> " As " <> showb v | (k, v) <- fields]
+        -- <> " Constructors " <> intercalateBuilder ", " (map fromText constructors)
     showb (Enum _ fields) = "Enum " <> showb (intercalate "," fields)
     showb (Alias name aliasee) = showb name <> " => " <> showb aliasee
     showb None = "None"
@@ -49,9 +51,9 @@ data Stmt
     | Return { value :: Expr }
     | Break
     | GroupDef { name :: Text, nameLocation :: Span, fields :: [(Text, (Type, Span))]
-               , extendsNames :: [(Text, Span)] }
+               , extendsNames :: [(Text, Span)], constructors :: [(Text, Span)] }
     | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
-    | AliasDef { name :: Text, nameLocation :: Span, aliasee :: Type }
+    | AliasDef { name :: Text, nameLocation :: Span, new :: Bool, aliasee :: Type }
     | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))], typeF_ :: Type
               , retType :: Type, retTypeLocation :: Span, bodyFu :: Body, defSpan :: Span }
     | For { variable :: Text, variableLocation :: Span, startValue :: Maybe Expr
@@ -90,6 +92,8 @@ data Expr
     | Dict { type_ :: Type, kvpairs :: [(Expr, Expr)], location :: Span }
     | Specialisation { type_ :: Type, base :: Expr, typeparams :: [Type], location :: Span }
     | Char { type_ :: Type, location :: Span, cValue :: Char }
+    | AliasConstructor { type_ :: Type, name :: Text, cNameLocation :: Span, arg :: Expr, location :: Span }
+    | GroupConstructor { type_ :: Type, name :: Text, cNameLocation :: Span, initialisers :: [(Span, Text, Expr)], location :: Span }
 
 intercalateBuilder :: Builder -> [Builder] -> Builder
 intercalateBuilder _ [] = fromText ""
@@ -105,6 +109,10 @@ instance TextShow Expr where
     showb (List _ _ els) = "[" <> intercalateBuilder "," (map showb els) <> "]"
     showb (Dict _ els _) = "{" <> intercalateBuilder "," (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
     showb (Specialisation _ base args _) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
+    showb (Char _ _ c) = "'" <> fromString [c] <> "'"
+    showb (AliasConstructor _ name _ arg _) = fromText name <> " { " <> showb arg <> " }"
+    showb (GroupConstructor _ name _ inits _) = fromText name <> " { " <>
+        intercalateBuilder ", " [fromText fname <> " = " <> showb value |(_, fname, value) <- inits] <> " }"
 instance Show Expr where show = unpack.showt
 
 data Value

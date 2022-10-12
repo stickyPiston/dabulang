@@ -22,7 +22,7 @@ main = do
         [filePath] ->
             Text.readFile filePath >>= \source -> runExceptT $ withExceptT (printError source) $ do
                 ast <- except $ mapLeft ParseError $ parse programP filePath source
-                (sts, Env _ delta) <- except $ runStateT (mapM inferStmt ast) env
+                (sts, Env _ delta _) <- except $ runStateT (mapM inferStmt ast) env
                 except =<< liftIO (evalStateT (runExceptT $ evalProgram sts) (EvalState { variables = prelude, types = delta }))
         _ -> return $ Left "Invalid arguments"
     either Text.putStrLn (const $ return ()) result

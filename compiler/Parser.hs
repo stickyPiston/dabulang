@@ -17,8 +17,9 @@ import Data.Maybe (fromMaybe)
 import qualified Data.HashMap.Strict as H
 import Text.Read (readMaybe)
 import Data.List (elemIndex)
-import Data.Bifunctor (Bifunctor(first), second)
+import Data.Bifunctor (first, second)
 import Error (Span(..))
+import Text.Megaparsec.Debug
 
 type Parser = Parsec Void Text
 
@@ -35,7 +36,7 @@ identP = do
         then fail $ "Unexpected keyword " ++ name
         else return (pack name)
 
-varP, numberP, strlitP, parensP, listP, mapP, termP, charP :: Parser Expr
+varP, numberP, strlitP, parensP, listP, mapP, termP, charP, constructP :: Parser Expr
 varP = do
     begin <- getSourcePos
     name <- identP
@@ -72,7 +73,29 @@ charP = do
     c <- between (char '\'') (char '\'') asciiChar
     end <- getSourcePos
     return $ Char None (Span begin end) c
-termP = choice [parensP, strlitP, try varP, listP, numberP, charP, mapP]
+aliasConstructP, groupConstructP :: Text -> SourcePos -> SourcePos -> Parser Expr
+aliasConstructP name nameBegin nameEnd = do
+    arg <- between (symbol "{") (symbol "}") exprP
+    exprEnd <- getSourcePos
+    return $ AliasConstructor None name (Span nameBegin nameEnd) arg (Span nameBegin exprEnd)
+groupConstructP name nameBegin nameEnd = do
+    initialisers <- between (symbol "{") (symbol "}") (initialiserP `sepBy1` symbol ",")
+    exprEnd <- getSourcePos
+    return $ GroupConstructor None name (Span nameBegin nameEnd) initialisers (Span nameBegin exprEnd)
+    where
+        initialiserP :: Parser (Span, Text, Expr)
+        initialiserP = do
+            nameBegin <- getSourcePos
+            name <- identP
+            nameEnd <- getSourcePos
+            value <- symbol "=" >> exprP
+            return (Span nameBegin nameEnd, name, value)
+constructP = do
+    nameBegin <- getSourcePos
+    name <- identP
+    nameEnd <- getSourcePos
+    try (groupConstructP name nameBegin nameEnd) <|> try (aliasConstructP name nameBegin nameEnd)
+termP = choice [parensP, strlitP, try constructP, try varP, listP, numberP, charP, mapP]
 
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
@@ -183,7 +206,7 @@ typedefP = do
     name <- symbol "Type" *> identP
     end <- getSourcePos
     type_params <- fromMaybe [] <$> optional typeParamsP <* symbol "="
-    choice $ map (\f -> f name (Span begin end)) [groupP, enumP, aliasP]
+    choice $ map (\f -> f name (Span begin end)) [groupP, enumP, newAliasP, aliasP]
     where
         typeParamsP :: Parser [Text]
         typeParamsP = symbol "[" *> identP `sepBy1` symbol "," <* symbol "]"
@@ -194,13 +217,15 @@ typedefP = do
             end <- getSourcePos
             return (name, Span begin end)
         aliasP, groupP, enumP :: Text -> Span -> Parser Stmt
-        aliasP name loc = AliasDef name loc <$> typeP <* symbol ";"
+        aliasP name loc = AliasDef name loc False <$> typeP <* symbol ";"
+        newAliasP name loc = AliasDef name loc True <$> between (symbol "New") (symbol ";") typeP 
         groupP name loc = do
             symbol "Group"
             fields <- groupFieldP `sepBy` symbol ","
             extends <- fromMaybe [] <$> optional (symbol "Extends" *> extendsP `sepBy1` symbol ",")
+            constructors <- fromMaybe [] <$> optional (symbol "Constructors" *> extendsP `sepBy1` symbol ",")
             symbol ";"
-            return $ GroupDef name loc fields extends
+            return $ GroupDef name loc fields extends constructors
         enumP name loc = EnumDef name loc <$> (symbol "Enum" *> identP `sepBy` symbol "," <* symbol ";")
         groupFieldP :: Parser (Text, (Type, Span))
         groupFieldP = do
