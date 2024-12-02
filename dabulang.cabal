@@ -50,7 +50,7 @@ executable lsp
     main-is:          Main.hs
     other-modules:    Completions
 
-    build-depends:    base ^>=4.15.1.0
+    build-depends:    base
                     , lsp
                     , text
                     , dabulangc

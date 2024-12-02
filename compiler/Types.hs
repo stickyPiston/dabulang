@@ -6,9 +6,10 @@ module Types(inferStmt, Env(..)) where
 import qualified Data.HashMap.Strict as M
 import Data.List (intercalate, find, transpose, sort, nub, zip4, (\\))
 import Data.Either (rights, lefts, isLeft)
+import Control.Monad (forM, when, zipWithM)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
 import Control.Monad.Trans (lift)
-import Control.Monad.State (modify, StateT, MonadState (get, put), when, zipWithM, gets, forM)
+import Control.Monad.State (modify, StateT, MonadState (get, put), gets)
 import Ast (Expr(..), Stmt(..), Body, Type(..), IfMatchBody (IfMatchBody), LetBinding (..))
 import Data.Text (Text, pack, intercalate)
 import TextShow (TextShow(showt))
