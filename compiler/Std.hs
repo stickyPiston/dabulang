@@ -18,6 +18,7 @@ env :: Env
 env = Env { gamma = M.fromList [
         ("length", (True, Func [(Nothing, Appl (Base "List") [Var "T" 1])] (Base "Nat"))),
         ("print", (True, Func [(Nothing, Var "T" 1)] (Base "Trivial"))),
+        ("input", (True, Func [] (Base "String"))),
         ("put_char", (True, Func [(Nothing, Base "Char")] (Base "Trivial"))),
         ("read", (True, Func [(Nothing, Base "String")] (Base "Nat"))),
         ("True", (True, Base "Bool")),
@@ -27,7 +28,8 @@ env = Env { gamma = M.fromList [
         ("to_char_list", (True, Func [(Nothing, Base "String")] (Appl (Base "List") [Base "Char"]))),
         ("to_string", (True, Func [(Nothing, (Appl (Base "List") [Base "Char"]))] (Base "String"))),
         ("to_ascii", (True, Func [(Nothing, Base "Char")] (Base "Nat"))),
-        ("from_ascii", (True, Func [(Nothing, Base "Nat")] (Base "Char")))
+        ("from_ascii", (True, Func [(Nothing, Base "Nat")] (Base "Char"))),
+        ("read_file", (True, Func [(Nothing, Base "String")] (Appl (Base "List") [Base "String"])))
     ], delta = M.empty, currentFunction = "" }
 
 prelude :: M.HashMap Text Value
@@ -35,6 +37,7 @@ prelude = M.fromList [
         ("length", VIntrin intrin_length)
     ,   ("read", VIntrin intrin_read)
     ,   ("print", VIntrin intrin_print)
+    ,   ("input", VIntrin intrin_input)
     ,   ("put_char", VIntrin intrin_put_char)
     ,   ("cons", VIntrin intrin_cons)
     ,   ("True", VBool True)
@@ -44,6 +47,7 @@ prelude = M.fromList [
     ,   ("to_string", VIntrin intrin_to_string)
     ,   ("to_ascii", VIntrin intrin_to_ascii)
     ,   ("from_ascii", VIntrin intrin_from_ascii)
+    ,   ("read_file", VIntrin intrin_read_file)
     ]
     where
         intrin_length [a] = case a of
@@ -53,6 +57,7 @@ prelude = M.fromList [
               Nothing -> error $ unpack s
               Just any -> return $ VNat any
         intrin_print [t] = liftIO $ print t >> return VSole
+        intrin_input _ = liftIO $ getLine >>= \s -> return $ VString $ pack s
         intrin_put_char [c] = liftIO $ case c of
             VChar c -> putChar c >> return VSole
         intrin_cons [a, l] = case l of
@@ -65,3 +70,5 @@ prelude = M.fromList [
         intrin_from_ascii [n] = case n of
             VNat n -> return $ VChar $ chr n
             VInt n -> return $ VChar $ chr n
+        intrin_read_file [f] = case f of
+            VString f -> liftIO $ readFile (unpack f) >>= \l -> return $ VList $ map (VString . pack) (lines l)
