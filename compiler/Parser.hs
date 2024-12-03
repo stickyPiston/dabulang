@@ -36,7 +36,7 @@ identP = do
         then fail $ "Unexpected keyword " ++ name
         else return (pack name)
 
-varP, numberP, strlitP, parensP, listP, mapP, termP, charP, constructP :: Parser Expr
+varP, numberP, strlitP, parensP, listP, mapP, termP, charP :: Parser Expr
 varP = do
     begin <- getSourcePos
     name <- identP
@@ -73,29 +73,7 @@ charP = do
     c <- between (char '\'') (char '\'') asciiChar
     end <- getSourcePos
     return $ Char None (Span begin end) c
-aliasConstructP, groupConstructP :: Text -> SourcePos -> SourcePos -> Parser Expr
-aliasConstructP name nameBegin nameEnd = do
-    arg <- between (symbol "{") (symbol "}") exprP
-    exprEnd <- getSourcePos
-    return $ AliasConstructor None name (Span nameBegin nameEnd) arg (Span nameBegin exprEnd)
-groupConstructP name nameBegin nameEnd = do
-    initialisers <- between (symbol "{") (symbol "}") (initialiserP `sepBy1` symbol ",")
-    exprEnd <- getSourcePos
-    return $ GroupConstructor None name (Span nameBegin nameEnd) initialisers (Span nameBegin exprEnd)
-    where
-        initialiserP :: Parser (Span, Text, Expr)
-        initialiserP = do
-            nameBegin <- getSourcePos
-            name <- identP
-            nameEnd <- getSourcePos
-            value <- symbol "=" >> exprP
-            return (Span nameBegin nameEnd, name, value)
-constructP = do
-    nameBegin <- getSourcePos
-    name <- identP
-    nameEnd <- getSourcePos
-    try (groupConstructP name nameBegin nameEnd) <|> try (aliasConstructP name nameBegin nameEnd)
-termP = choice [parensP, strlitP, try constructP, try varP, listP, numberP, charP, mapP]
+termP = choice [parensP, strlitP, try varP, listP, numberP, charP, mapP]
 
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
@@ -155,7 +133,7 @@ typeP = choice [funcTypeP, applTypeP, baseTypeP]
             <$> (baseTypeP <|> applTypeP) <*> between (symbol "[") (symbol "]") (typeP `sepBy` symbol ",")
         baseTypeP = Base <$> identP
 
-ifP, returnP, forP, breakP, typedefP, funcP, letP, matchP :: Parser Stmt
+ifP, returnP, forP, breakP, funcP, letP, matchP :: Parser Stmt
 ifP = do
     begin <- getSourcePos
     cond <- between (symbol "If") (symbol "Then") exprP
@@ -201,39 +179,6 @@ forP = do
         assignmentP = symbol "=" >> exprP
         byP = symbol "By" >> exprP
 breakP = symbol "Break" >> semicolon >> return Break
-typedefP = do
-    begin <- getSourcePos
-    name <- symbol "Type" *> identP
-    end <- getSourcePos
-    type_params <- fromMaybe [] <$> optional typeParamsP <* symbol "="
-    choice $ map (\f -> f name (Span begin end)) [groupP, enumP, newAliasP, aliasP]
-    where
-        typeParamsP :: Parser [Text]
-        typeParamsP = symbol "[" *> identP `sepBy1` symbol "," <* symbol "]"
-        extendsP :: Parser (Text, Span)
-        extendsP = do
-            begin <- getSourcePos
-            name <- identP
-            end <- getSourcePos
-            return (name, Span begin end)
-        aliasP, groupP, enumP :: Text -> Span -> Parser Stmt
-        aliasP name loc = AliasDef name loc False <$> typeP <* symbol ";"
-        newAliasP name loc = AliasDef name loc True <$> between (symbol "New") (symbol ";") typeP 
-        groupP name loc = do
-            symbol "Group"
-            fields <- groupFieldP `sepBy` symbol ","
-            extends <- fromMaybe [] <$> optional (symbol "Extends" *> extendsP `sepBy1` symbol ",")
-            constructors <- fromMaybe [] <$> optional (symbol "Constructors" *> extendsP `sepBy1` symbol ",")
-            symbol ";"
-            return $ GroupDef name loc fields extends constructors
-        enumP name loc = EnumDef name loc <$> (symbol "Enum" *> identP `sepBy` symbol "," <* symbol ";")
-        groupFieldP :: Parser (Text, (Type, Span))
-        groupFieldP = do
-            begin <- getSourcePos
-            name <- identP <* symbol "As"
-            type_ <- typeP
-            end <- getSourcePos
-            return (name, (type_, Span begin end))
 funcP = do
     startLoc <- getSourcePos
     symbol "Func"
@@ -328,7 +273,7 @@ whileP until = do
     return $ (if until then Loop True else Loop False) cond body (Span bodyStart bodyEnd)
 
 stmtP :: Parser Stmt
-stmtP = choice [ifP, forP, returnP, breakP, typedefP, letP, matchP, whileP True, whileP False, funcP, ExprStmt <$> (exprP <* semicolon)]
+stmtP = choice [ifP, forP, returnP, breakP, letP, matchP, whileP True, whileP False, funcP, ExprStmt <$> (exprP <* semicolon)]
 
 programP :: Parser [Stmt]
 programP = many stmtP <* eof

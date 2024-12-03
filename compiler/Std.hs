@@ -13,6 +13,7 @@ import Data.Text (pack, Text, unpack)
 import Text.Read (readMaybe)
 import Data.Char ( ord, chr )
 import Control.Monad.IO.Class (liftIO, MonadIO)
+import TextShow (printT)
 
 env :: Env
 env = Env { gamma = M.fromList [
@@ -56,7 +57,7 @@ prelude = M.fromList [
             VString s -> case readMaybe (unpack s) of
               Nothing -> error $ unpack s
               Just any -> return $ VNat any
-        intrin_print [t] = liftIO $ print t >> return VSole
+        intrin_print [t] = liftIO $ printT t >> return VSole
         intrin_input _ = liftIO $ getLine >>= \s -> return $ VString $ pack s
         intrin_put_char [c] = liftIO $ case c of
             VChar c -> putChar c >> return VSole

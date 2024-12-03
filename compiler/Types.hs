@@ -7,7 +7,7 @@ import qualified Data.HashMap.Strict as M
 import Data.List (intercalate, find, transpose, sort, nub, zip4, (\\))
 import Data.Either (rights, lefts, isLeft)
 import Control.Monad (forM, when, zipWithM)
-import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT))
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT, runMaybeT), hoistMaybe)
 import Control.Monad.Trans (lift)
 import Control.Monad.State (modify, StateT, MonadState (get, put), gets)
 import Ast (Expr(..), Stmt(..), Body, Type(..), IfMatchBody (IfMatchBody), LetBinding (..))
@@ -19,16 +19,11 @@ import Data.Maybe (fromJust)
 import Text.Megaparsec (SourcePos(sourceColumn), unPos, mkPos)
 import Data.Bifunctor (second, first)
 
--- hoistMaybe polyfill, because for some reason it's not in a reasonable verion of base 
-hoistMaybe :: Monad m => Maybe a -> MaybeT m a
-hoistMaybe = MaybeT . pure
-
 -- Envirornments for variables (gamma) and types (delta)
 data Env = Env
     { gamma :: M.HashMap Text (Bool, Type)
     , delta :: M.HashMap Text Type
     , currentFunction :: Text }
-    deriving Show
 -- Infer monad
 type Infer = StateT Env (Either Error)
 -- Substitutions map variable indices to types
@@ -66,8 +61,7 @@ compose a b
     | all_same_type a b = return $ a <> b
     -- Composing two substitutions with conflicting replacements for the same variable
     -- yields an error
-    | otherwise = Left $
-        "Conflicting types for type parameter " <> pack (show a) <> " and " <> pack (show b)
+    | otherwise = Left "Conflicting types for type parameter "
     where
         all_same_type :: Subst -> Subst -> Bool
         all_same_type = ((and . M.elems) .) . M.intersectionWith (==)
@@ -115,22 +109,6 @@ inferStmt stmt = case stmt of
         return stmt {condU = typed_cond, bodyU = typed_body }
     Return expr -> Return <$> inferExpr expr
     Break -> return Break
-    GroupDef name _ ownFields extends constructors -> do
-        env@(Env gamma delta _) <- get
-        -- TODO: Check for each type whether it is a group
-        traverse_ (\(gname, loc) -> maybeToInfer loc "Unknown type" $ delta M.!? gname) extends
-        additionalFields <- mconcat <$> traverse getGroupFieldsFromEnv [name | (name, _) <- extends]
-        let fields = map (second fst) ownFields ++ additionalFields
-        let groupType = Group name fields (fst <$> extends) (fst <$> constructors)
-        put $ env { gamma = M.insert name (True, Func (map (first Just) fields) groupType) gamma
-                  , delta = M.insert name groupType delta }
-        return stmt
-    EnumDef name _ fields -> do
-        env <- get ; put $ env { delta = M.insert name (Enum name fields) (delta env) }
-        return stmt
-    AliasDef name _ new aliasee -> do
-        env <- get ; put $ env { delta = M.insert name (Alias name aliasee) (delta env) }
-        return stmt
     FuncDef name _ params _ ret_type retTypeLoc body _ -> do
         env <- get
         retType' <- case ret_type of
@@ -224,18 +202,6 @@ inferStmt stmt = case stmt of
 
 inferExpr :: Expr -> Infer Expr
 inferExpr expr = case expr of
-    Binary _ lhs rhs "." _ _ -> do
-        typed_lhs <- inferExpr lhs
-        case (type_ typed_lhs, rhs) of
-            (Group gname fields extends _, Variable _ _ name) -> do
-                extendsFields <- traverse getGroupFieldsFromEnv extends
-                let allFields = mconcat $ fields : extendsFields
-                 in case lookup name allFields of
-                    Just field -> let typed_ident = rhs { type_ = Base "Ident" }
-                                in return $ expr { rhs = typed_ident, type_ = field }
-                    Nothing -> throwErrorAt rhs $ "Unknown field " <> name <> " in group " <> gname
-            _ -> throwErrorAt lhs "The dot operator only operates on group types and identifiers"
-        where
     Binary _ lhs rhs "=" _ _ -> do
         env <- get ; typed_rhs <- inferExpr rhs
         -- Constrains the left-hand side of the assignment operator to variable names,
@@ -271,16 +237,7 @@ inferExpr expr = case expr of
                                 let typed_call = lhs { callee = typed_callee, args = typed_args, type_ = val_ty }
                                  in return expr { lhs = typed_call, rhs = typed_rhs, type_ = val_ty }
                             _ -> throwErrorAt lhs "Wrong arguments to map index"
-                    _ -> throwErrorAt lhs $ "Expected a list index or map index as lhs of assignment " <> pack (show typed_callee)
-            b@(Binary _ lhs var@(Variable _ _ name) "." _ _) -> do
-                typed_lhs <- inferExpr lhs
-                case type_ typed_lhs of
-                    Group gname _ _ constructors -> do
-                        fields <- getGroupFieldsFromEnv gname
-                        case lookup name fields of
-                            Just ty -> return expr { lhs = b { lhs = typed_lhs }, rhs = typed_rhs, type_ = ty }
-                            Nothing -> throwErrorAt var $ "Unknown field " <> name <> " in group " <> gname
-                    _ -> throwErrorAt lhs "Expected a group"
+                    _ -> throwErrorAt lhs "Expected a list index or map index as lhs of assignment"
             _ -> throwErrorAt lhs "Cannot assign"
         where
             unsnoc :: [a] -> Maybe ([a], a)
@@ -392,40 +349,7 @@ inferExpr expr = case expr of
             ftv (Var _ i) = [i]
             ftv (Appl base args) = ftv base ++ (args >>= ftv)
             ftv (Func args ret) = (args >>= ftv . snd) ++ ftv ret
-            ftv (Alias _ t) = ftv t
-            ftv (Group _ fields supers _) = map snd fields >>= ftv
             ftv _ = []
-    AliasConstructor _ name _ value _ -> undefined
-    GroupConstructor _ name _ initialisers loc -> do
-        env@(Env gamma delta func) <- get
-        case delta M.!? name of
-            Just ty@(Group _ fields extends constructors)
-                | not $ isExhaustive fields initialisers -> lift $ throwError loc $
-                    "All fields must be initialised, there are no initialisers for " <>
-                    Data.Text.intercalate ", " (missingFields fields initialisers)
-                | func `elem` constructors -> do
-                    typedInitialisers <- forM initialisers $ \(loc, fname, value) -> do
-                        fieldType <- maybeToInfer loc
-                            ("Unknown field " <> fname <> " in group " <> name)
-                            (fname `lookup` fields)
-                        typedValue <- inferExpr value
-                        typedValue `hasType` [fieldType]
-                        return (loc, fname, typedValue)
-                    return expr { initialisers = typedInitialisers, type_ = ty }
-                | func == "" -> lift $ throwError loc $ "Unexpected constructor for type " <> name <> " outside of a function"
-                | otherwise -> lift $ throwError loc $
-                    "Function " <> func <> " is not marked as a constructor for type " <> name
-            Just ty -> lift $ throwError loc $ "Cannot initialise a non-group type, " <> name <> " is a " <> showt ty
-            Nothing -> lift $ throwError loc $ "Unknown type " <> name
-        where isExhaustive fields inits = map fst fields `setEq` map (\(_, e, _) -> e) inits
-              a `setEq` b = all (`elem` b) a && all (`elem` a) b
-              missingFields fields inits = map fst fields \\ map (\(_, e, _) -> e) inits
     where
         throwErrorHere :: Text -> Infer a
         throwErrorHere = lift . throwError (location expr)
-
-getGroupFieldsFromEnv :: Text -> Infer [(Text, Type)]
-getGroupFieldsFromEnv name = do
-    env <- gets delta
-    let group = env M.! name
-     in return $ fieldTypes group

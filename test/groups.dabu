@@ -1,9 +1,0 @@
-Type Person = Group name As String, age As Nat;
-Type ComputerHaver = Group computer As String;
-Type Programmer = Group favourite_language As String Extends Person, ComputerHaver Defaulted Constructors fromPerson, fromComputerHaver;
-Type FrontendProgrammer = Group favourite_framework As String Extends Programmer;
-
-Const john = FrontendProgrammer("Vue", "Haskell", "John", 23, "MacBook Air M1");
-print(john);
-"Prints FrontendProgrammer(name = John, favourite_language = Haskell
-                          , favourite_framework = Vue, age = 23, computer = MacBook Air M1)";

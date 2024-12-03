@@ -19,9 +19,6 @@ data Type
     | Func { paramTypes :: [(Maybe Text, Type)], retType :: Type }
     | Appl { base :: Type, argTypes :: [Type] }
     | Var { nameT :: Text, index :: Int }
-    | Group { nameT :: Text, fieldTypes :: [(Text, Type)], extends :: [Text], constructors :: [Text] }
-    | Enum { nameT :: Text, names :: [Text] }
-    | Alias { nameT :: Text, aliasee :: Type }
     | None
     deriving Eq
 instance TextShow Type where
@@ -29,16 +26,9 @@ instance TextShow Type where
     showb (Func params ret) = "(" <> intercalateBuilder ", " (map (showb . snd) params) <> ") -> " <> showb ret
     showb (Appl base args) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
     showb (Var name _) = fromText name
-    showb (Group name fields supers constructors) = fromText name
-        -- "Group " <> intercalateBuilder ", " [showb k <> " As " <> showb v | (k, v) <- fields]
-        -- <> " Constructors " <> intercalateBuilder ", " (map fromText constructors)
-    showb (Enum _ fields) = "Enum " <> showb (intercalate "," fields)
-    showb (Alias name aliasee) = showb name <> " => " <> showb aliasee
     showb None = "None"
-instance Show Type where show = unpack . showt
 
 data IfMatchBody = IfMatchBody { cond :: Expr, condLocation :: Span, body :: Body, bodySpan :: Span }
-    deriving Show
 data LetBinding = LetBinding { name :: Text, nameLocation :: Span, annotation :: Maybe Type
     , annotationLocation :: Maybe Span, value :: Expr }
 instance TextShow LetBinding where
@@ -50,10 +40,6 @@ data Stmt
     | Loop { isUntil :: Bool, condU :: Expr, bodyU :: Body, bodyUSpan :: Span }
     | Return { value :: Expr }
     | Break
-    | GroupDef { name :: Text, nameLocation :: Span, fields :: [(Text, (Type, Span))]
-               , extendsNames :: [(Text, Span)], constructors :: [(Text, Span)] }
-    | EnumDef { name :: Text, nameLocation :: Span, values :: [Text] }
-    | AliasDef { name :: Text, nameLocation :: Span, new :: Bool, aliasee :: Type }
     | FuncDef { name :: Text, nameLocation :: Span, params :: [(Text, (Type, Span))], typeF_ :: Type
               , retType :: Type, retTypeLocation :: Span, bodyFu :: Body, defSpan :: Span }
     | For { variable :: Text, variableLocation :: Span, startValue :: Maybe Expr
@@ -79,7 +65,6 @@ instance TextShow Stmt where
     showb (Let is_const bindings) = (if is_const then "Const " else "Let ") <>
         intercalateBuilder ", " (map showb bindings) <> ";"
     showb (ExprStmt expr) = showb expr <> ";"
-instance Show Stmt where show = unpack . showt
 
 data Expr
     = Number { type_ :: Type, location :: Span, nValue :: Int }
@@ -92,8 +77,6 @@ data Expr
     | Dict { type_ :: Type, kvpairs :: [(Expr, Expr)], location :: Span }
     | Specialisation { type_ :: Type, base :: Expr, typeparams :: [Type], location :: Span }
     | Char { type_ :: Type, location :: Span, cValue :: Char }
-    | AliasConstructor { type_ :: Type, name :: Text, cNameLocation :: Span, arg :: Expr, location :: Span }
-    | GroupConstructor { type_ :: Type, name :: Text, cNameLocation :: Span, initialisers :: [(Span, Text, Expr)], location :: Span }
 
 intercalateBuilder :: Builder -> [Builder] -> Builder
 intercalateBuilder _ [] = fromText ""
@@ -110,10 +93,6 @@ instance TextShow Expr where
     showb (Dict _ els _) = "{" <> intercalateBuilder "," (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
     showb (Specialisation _ base args _) = showb base <> "[" <> intercalateBuilder ", " (map showb args) <> "]"
     showb (Char _ _ c) = "'" <> fromString [c] <> "'"
-    showb (AliasConstructor _ name _ arg _) = fromText name <> " { " <> showb arg <> " }"
-    showb (GroupConstructor _ name _ inits _) = fromText name <> " { " <>
-        intercalateBuilder ", " [fromText fname <> " = " <> showb value |(_, fname, value) <- inits] <> " }"
-instance Show Expr where show = unpack.showt
 
 data Value
     = VBool { extractBool :: Bool }
@@ -126,12 +105,10 @@ data Value
     | VList [Value]
     | VMap [(Value, Value)]
     | VChar { extractChar :: Char }
-    | VConstructor ([Value] -> Value)
-    | VGroup { groupName :: Text, groupValues :: M.HashMap Text Value }
 extractNumber :: Value -> Int
 extractNumber (VNat n) = n
 extractNumber (VInt n) = n
-extractNumber e = error $ "Extracting number from " <> show e
+extractNumber e = error $ unpack $ "Extracting number from " <> showt e
 instance Eq Value where
     VBool a == VBool b = a == b
     VInt a == VInt b = a == b
@@ -153,11 +130,7 @@ instance TextShow Value where
     showb (VList els) = "[" <> intercalateBuilder ", " (map showb els) <> "]"
     showb (VChar c) = "'" <> fromString [c] <> "'"
     showb (VMap els) = "{" <> intercalateBuilder ", " (map (\(k, v) -> showb k <> " : " <> showb v) els) <> "}"
-    showb (VGroup name values) = fromText name <> "("
-        <> intercalateBuilder ", " (H.elems $ H.mapWithKey (\key value -> fromText key <> " = " <> showb value) values)
-        <> ")"
     showb a = "thing"
-instance Show Value where show = unpack . showt
 
 data RuntimeError = Error Error | ReturnValue Value | BreakLoop
 data EvalState = EvalState { variables :: M.HashMap Text Value, types :: M.HashMap Text Type }

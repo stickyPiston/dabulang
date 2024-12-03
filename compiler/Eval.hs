@@ -33,9 +33,6 @@ evalExpr expr = case expr of
         env <- gets variables ; case env M.!? name of
             Nothing -> throwE $ Error $ LocatedRuntimeError ("Undefined variable " <> name) loc
             Just va -> return va
-    Binary _ lhs (Variable _ _ field) "." _ _ -> do
-        VGroup name fields <- evalExpr lhs
-        return $ fields M.! field
     Binary _ lhs rhs "=" _ _ -> evalExpr rhs >>= assignAt lhs
         where
             assignAt :: Expr -> Value -> Eval Value
@@ -57,9 +54,6 @@ evalExpr expr = case expr of
                     --         Nothing -> error "" -- TODO: Runtime error
                     --     _ -> error "" -- should be unreachable
                     _ -> error "" -- should be unreachable
-            assignAt (Binary _ lhs (Variable _ _ name) "." _ _) val = do
-                group@(VGroup _ fields) <- evalExpr lhs
-                assignAt lhs group { groupValues = M.insert name val fields }
             assignAt _ _ = error ""
             replaceAtIndex :: Span -> [Value] -> Value -> Int -> Eval [Value]
             replaceAtIndex _ [] val 0 = return [val]
@@ -121,8 +115,7 @@ evalExpr expr = case expr of
                         BreakLoop -> throwE $ Error $ UnlocatedRuntimeError "Break out of function"
             VIntrin intrin -> intrin args
             VList els -> arrayIndex els args
-            VConstructor f -> return $ f args
-            _ -> error $ show callee
+            _ -> error ""
         where
             atMay :: [a] -> Int -> Maybe a
             atMay (x : xs) 0 = Just x
@@ -141,10 +134,6 @@ evalExpr expr = case expr of
     Dict _ els _ -> VMap <$> (zip <$> traverse (evalExpr . fst) els <*> traverse (evalExpr . snd) els)
     Char _ _ c -> return $ VChar c
     Specialisation _ ex _ _ -> evalExpr ex
-    GroupConstructor _ name _ inits _ -> do
-        fields <- traverse (\(_, name, expr) -> (name,) <$> evalExpr expr) inits
-        return $ VGroup name (M.fromList fields)
-    AliasConstructor _ name _ value _ -> undefined
     where
         throwICE :: Text -> Eval a
         throwICE = throwE . Error . ICE
@@ -169,15 +158,6 @@ evalStmt stmt = case stmt of
                         Right () -> evalBody b cond body
     Return ex -> evalExpr ex >>= throwE . ReturnValue
     Break -> throwE BreakLoop
-    GroupDef name _ fields_ extends constructors -> do
-        delta <- gets types
-        let extensionNames = map fst extends
-            fieldNames = fst <$> fields_
-            additionalParamNames = concat [map fst fields | (extension, _) <- extends, Group name fields extends _ <- [delta M.! extension]]
-            construct = VConstructor $ \args -> VGroup name $ M.fromList $ zip (fieldNames ++ additionalParamNames) args 
-         in modifyVariables $ M.insert name construct
-    EnumDef txt sp txts -> undefined
-    AliasDef txt sp new ty -> undefined
     FuncDef name _ params _ _ _ body _ -> modifyVariables $ M.insert name (VFunc (map fst params) body)
     For var _ start end by body _ -> do
         start <- evalMaybe start
