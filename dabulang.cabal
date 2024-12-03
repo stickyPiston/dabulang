@@ -7,14 +7,7 @@ bug-reports:        https://github.com/stickyPiston/dabulang/issues
 author:             Job Vonk
 maintainer:         sticcpistt@icloud.com
 
-extra-source-files: TODO.org
-                  , test
-                  , README.md
-                  , .hlint.yaml
-                  , vscode-plugin
-                  , .vscode
-
-library dabulangc
+library
     exposed-modules:  Parser
                     , Types
                     , Ast
@@ -38,25 +31,10 @@ executable dabulang
     main-is:          Main.hs
     hs-source-dirs:   app
     build-depends:    base
-                    , dabulangc
+                    , dabulang
                     , megaparsec
                     , mtl
                     , text
                     , unordered-containers
                     , transformers
-    default-language: Haskell2010
-
-executable lsp
-    main-is:          Main.hs
-    other-modules:    Completions
-
-    build-depends:    base
-                    , lsp
-                    , text
-                    , dabulangc
-                    , megaparsec
-                    , transformers
-                    , unordered-containers
-                    , lens
-    hs-source-dirs:   lsp
     default-language: Haskell2010
